@@ -10,6 +10,41 @@ app.get("/", (c) => {
   return c.text("GET /search?username=file&name=convert&description=audio");
 });
 
+app.get("/categories", (c) => {
+  const categories = [
+    "🌿 Miscellaneous",
+    "👥 Social",
+    "🙋‍♂️ Promoting",
+    "🛍 Shopping",
+    "😂 Humor",
+    "🎮 Gaming",
+    "🏋️‍♂️ HTML5 Games",
+    "🤖 Bot creating",
+    "⚒ Sticker pack creation",
+    "🧸 Stickers & Gif's",
+    "🍟 Video",
+    "📸 Photography",
+    "🎧 Music",
+    "⚽ Sports",
+    "☔️ Weather",
+    "📰 News",
+    "✈️ Places & Traveling",
+    "📞 Android & Tech News",
+    "📲 Apps & software",
+    "📚 Books & Magazines",
+    "📓 Translation and dictionaries",
+    "💳 Public ID's",
+    "📝 Text Formatting",
+    "📦 Multiuse",
+    "🛠️ Group & channel tools",
+    "🍃 Inline Web Search",
+    "⏰ Organization and reminders",
+    "⚙️ Tools"
+  ];
+
+  return c.json(categories);
+});
+
 app.get("/gimme", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT * FROM bots").all()
 
