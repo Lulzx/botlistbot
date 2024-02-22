@@ -3,3 +3,4 @@ bots.json
 category.json
 *.sql
 .DS_Store
+bot/
