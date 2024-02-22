@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import orjson
 
-CATEGORY_FILE = 'category.json'
-BOT_FILE = 'bot.json'
+CATEGORY_FILE = '../data/category.json'
+BOT_FILE = '../data/bot.json'
 
 
 def load_file(file_path):

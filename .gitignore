@@ -1,6 +1,7 @@
 __pycache__
+.DS_Store
+*.sql
+bot/
 bots.json
 category.json
-*.sql
-.DS_Store
-bot/
+data/
