@@ -1,1 +1,1 @@
-# botlistbot
+# botlist
