@@ -1,32 +1,28 @@
-import { type Api, Bot, type Context, webhookCallback } from 'grammy';
+import { Bot, webhookCallback } from 'grammy/web';
 import { Hono } from 'hono';
-import { setupBotHandlers } from './handlers';
-import { HonoContext } from './types';
+import { HonoContext, MyContext } from './types';
+import { composer } from './handlers/index';
 
 const app = new Hono<HonoContext>();
 
-let bot: Bot<Context, Api>;
-
-app.use('*', async (c, next) => {
-	if (!bot) {
+app.post('/:token', async (c) => {
+	const rt = c.req.params("token");
+	if (rt === c.env.BOT_TOKEN) {
+		const bot: Bot<MyContext> = new Bot<MyContext>(c.env.BOT_TOKEN);
 		console.log('Initializing Bot and handlers...');
-		bot = new Bot<Context, Api>(c.env.BOT_TOKEN);
-
-		setupBotHandlers(bot);
+		bot.use(composer);
 		console.log('Bot and handlers initialized.');
+		try {
+			const callback = webhookCallback(bot, 'hono');
+			return callback(c);
+		}
+		catch (ex) {
+			return c.text(ex.toString(), 200);
+		}
 	}
-
-	await next();
-});
-
-app.post('/', async (c) => {
-	if (!bot) {
-		console.error('Bot not initialized in POST route!');
-		return c.text('Internal Server Error: Bot not ready', 500);
+	else {
+		return c.text('Invalid Token', 500);
 	}
-
-	const callback = webhookCallback(bot, 'hono');
-	return callback(c);
 });
 
 app.get('/', (c) => c.text('Hello! This is the bot endpoint. Use POST for Telegram webhooks.'));
