@@ -1,6 +1,6 @@
 import { Bot, Context } from 'grammy';
 import { MESSAGES } from './constants';
-import { createMainKeyboard } from './keyboards';
+import { createMainKeyboard, createCategoriesKeyboard } from './keyboards';
 
 export const setupBotHandlers = (bot: Bot<Context>) => {
   bot.command('start', async (ctx) => {
@@ -11,13 +11,31 @@ export const setupBotHandlers = (bot: Bot<Context>) => {
     });
   });
 
+  bot.command('categories', async (ctx) => {
+    await ctx.reply('💬 Please select a category', {
+      reply_markup: createCategoriesKeyboard()
+    });
+  });
+
   bot.on('callback_query', async (ctx) => {
     const callbackData = ctx.callbackQuery.data;
+    if (!callbackData) {
+      console.log('Received callback query without data');
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    
     console.log(`Callback received: ${callbackData}, Message ID: ${ctx.callbackQuery.message?.message_id}`);
     
     await ctx.answerCallbackQuery();
 
     try {
+      if (callbackData.startsWith('category:')) {
+        const category = callbackData.substring('category:'.length);
+        await ctx.reply(`You selected: ${category}\nShowing bots in this category...`);
+        return;
+      }
+
       const messageMap = {
         'help': MESSAGES.WELCOME,
         'contributing': MESSAGES.CONTRIBUTING,
