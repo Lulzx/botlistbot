@@ -8,7 +8,7 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-04-02",
 	"vars": {
-		"API_URL": "https://bot.lulz.workers.dev" // Default for local dev, override in Cloudflare
+		"API_BASE_URL": "https://bot.lulz.workers.dev"
 	},
 	"observability": {
 		"enabled": true,

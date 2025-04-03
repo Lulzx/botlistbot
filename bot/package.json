@@ -10,7 +10,8 @@
 		"test": "vitest",
 		"cf-typegen": "wrangler types",
 		"biome-check": "biome check ./src",
-		"biome-apply": "biome check --apply ./src"
+		"biome-apply": "biome check --apply ./src",
+		"webhook": "bun run src/set-webhook.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
