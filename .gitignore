@@ -11,3 +11,4 @@ bun.lock
 .editorconfig
 .vscode
 bot/worker-configuration.d.ts
+setup.sh
