@@ -40,7 +40,7 @@ composer.on('callback_query:data', async (ctx) => {
             await ctx.editMessageText("🤷 No bots found in this category.");
           } else {
             const botList = bots
-              .map(bot => `• @${bot.username} - ${bot.name}`)
+              .map(bot => `• ${bot.username} - ${bot.name}`)
               .join('\n');
             await ctx.editMessageText(`Bots in category ${categoryId}:\n${botList}`);
           }
