@@ -2,7 +2,7 @@ import { Composer } from "grammy/web";
 import { MESSAGES } from './../constants';
 import { createMainKeyboard } from './../keyboards';
 import { MyContext } from "../types"; 
-import { fetchFromApi, Bot } from "../api"; 
+import { fetchFromApi, Bot, Category } from "../api"; 
 
 export const composer = new Composer<MyContext>(); 
 
@@ -33,20 +33,25 @@ composer.on('callback_query:data', async (ctx) => {
         }
 
         try {
-          await ctx.editMessageText("⏳ Fetching bots..."); 
+          await ctx.reply("⏳ Fetching bots...");
+
+          const categories = await fetchFromApi<Category[]>(`/categories`, ctx.env.API_BASE_URL);
+          const category = categories.find(cat => cat.id === categoryId);
+          const categoryName = category ? category.name : `Category ${categoryId}`;
+          
           const bots = await fetchFromApi<Bot[]>(`/bots/category/${categoryId}`, ctx.env.API_BASE_URL);
 
           if (bots.length === 0) {
-            await ctx.editMessageText("🤷 No bots found in this category.");
+            await ctx.reply(`🤷 No bots found in ${categoryName}.`);
           } else {
             const botList = bots
               .map(bot => `• ${bot.username} - ${bot.name}`)
               .join('\n');
-            await ctx.editMessageText(`Bots in category ${categoryId}:\n${botList}`);
+            await ctx.reply(`Bots in ${categoryName}:\n${botList}`);
           }
         } catch (fetchError) {
           console.error(`Failed to fetch bots for category ${categoryId}:`, fetchError);
-          await ctx.editMessageText("Sorry, I couldn't fetch the bots for this category. Please try again later.");
+          await ctx.reply("Sorry, I couldn't fetch the bots for this category. Please try again later.");
         }
         return; 
       }
@@ -61,7 +66,7 @@ composer.on('callback_query:data', async (ctx) => {
       const message = messageMap[callbackData as keyof typeof messageMap];
       
       if (message) {
-        await ctx.editMessageText(message, {
+        await ctx.reply(message, {
           parse_mode: 'HTML',
           reply_markup: createMainKeyboard()
         });
