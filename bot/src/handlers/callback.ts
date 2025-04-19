@@ -66,10 +66,18 @@ composer.on('callback_query:data', async (ctx) => {
       const message = messageMap[callbackData as keyof typeof messageMap];
       
       if (message) {
-        await ctx.reply(message, {
-          parse_mode: 'HTML',
-          reply_markup: createMainKeyboard()
-        });
+        try {
+          await ctx.editMessageText(message, {
+            parse_mode: 'HTML',
+            reply_markup: createMainKeyboard(),
+          });
+        } catch (e) {
+          console.error('Failed to edit message:', e);
+          await ctx.reply(message, {
+            parse_mode: 'HTML',
+            reply_markup: createMainKeyboard(),
+          });
+        }
       }
     } catch (error) {
       console.error(`Error processing callback ${callbackData} for message ${ctx.callbackQuery.message?.message_id}:`, error);
