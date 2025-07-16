@@ -8,11 +8,14 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-04-02",
 	"vars": {
-		"API_BASE_URL": "https://bot.lulz.workers.dev"
+		"API_BASE_URL": "https://botlist-api.lulz.workers.dev"
 	},
 	"observability": {
 		"enabled": true,
-	}
+	},
+	"services": [
+		{ "binding": "API", "service": "botlist-api" }
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

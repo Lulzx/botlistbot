@@ -2,7 +2,7 @@ export const MESSAGES = {
   WELCOME: `I'm the bot in charge of maintaining the <b>@BotList</b> channel, the most reliable and unbiased bot catalog out there. I was built to simplify navigation and to automate the process of submitting, reviewing and publishing bots by the <b>@BotListChat</b> community.
 
 🔘 <b>First steps:</b>
-1️⃣ Start off by using the <b>/category</b> command and use the available buttons from there on.
+1️⃣ Start off by using the <b>/categories</b> command and use the available buttons from there on.
 2️⃣ Send individual <b>@BotList</b> categories to your friends via inline search (i.e. type <b>@botlistbot music</b> in any chat).
 3️⃣ Add me to your groups and <b>/subscribe</b> to BotList updates.
 4️⃣ Join the <b>@BotListChat</b> community and <b>/contribute</b> to the BotList: <b>#new @newbot</b>🖊 - description

@@ -15,16 +15,16 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@cloudflare/workers-types": "^4.20250419.0",
-		"@types/node": "^22.14.1",
+		"@cloudflare/workers-types": "^4.20250715.0",
+		"@types/node": "^22.16.4",
 		"typescript": "^5.8.3",
 		"vitest": "^1.6.1",
-		"wrangler": "^4.12.0"
+		"wrangler": "^4.24.4"
 	},
 	"dependencies": {
-		"@neondatabase/serverless": "^1.0.0",
-		"dotenv": "^16.5.0",
-		"grammy": "^1.36.0",
-		"hono": "^4.7.7"
+		"@neondatabase/serverless": "^1.0.1",
+		"dotenv": "^16.6.1",
+		"grammy": "^1.37.0",
+		"hono": "^4.8.5"
 	}
 }

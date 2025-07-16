@@ -3,6 +3,7 @@ import { Context } from "grammy/web";
 export interface Env {
   BOT_TOKEN: string;
   API_BASE_URL: string;
+  API: Fetcher;
 }
 
 export type HonoContext = {

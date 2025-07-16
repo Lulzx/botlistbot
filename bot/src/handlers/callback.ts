@@ -35,11 +35,21 @@ composer.on('callback_query:data', async (ctx) => {
         try {
           await ctx.reply("⏳ Fetching bots...");
 
-          const categories = await fetchFromApi<Category[]>(`/categories`, ctx.env.API_BASE_URL);
-          const category = categories.find(cat => cat.id === categoryId);
-          const categoryName = category ? category.name : `Category ${categoryId}`;
+          const categoryNames: { [key: number]: string } = {
+            1: "🌿 Miscellaneous", 2: "👥 Social", 3: "🙋‍♂️ Promoting", 4: "🛍 Shopping",
+            5: "😂 Humor", 6: "🎮 Gaming", 7: "🏋️‍♂️ HTML5 Games", 8: "🤖 Bot creating",
+            9: "⚒ Sticker pack creation", 10: "🧸 Stickers & Gif's", 11: "🍟 Video",
+            12: "📸 Photography", 13: "🎧 Music", 14: "⚽ Sports", 15: "☔️ Weather",
+            16: "📰 News", 17: "✈️ Places & Traveling", 18: "📞 Android & Tech News",
+            19: "📲 Apps & software", 20: "📚 Books & Magazines", 21: "📓 Translation and dictionaries",
+            22: "💳 Public ID's", 23: "📝 Text Formatting", 24: "📦 Multiuse",
+            25: "🛠️ Group & channel tools", 26: "🍃 Inline Web Search", 27: "⏰ Organization and reminders",
+            28: "⚙️ Tools"
+          };
           
-          const bots = await fetchFromApi<Bot[]>(`/bots/category/${categoryId}`, ctx.env.API_BASE_URL);
+          const categoryName = categoryNames[categoryId] || `Category ${categoryId}`;
+          
+          const bots = await fetchFromApi<Bot[]>(`/bots/category/${categoryId}`, ctx.env.API_BASE_URL, ctx.env.API);
 
           if (bots.length === 0) {
             await ctx.reply(`🤷 No bots found in ${categoryName}.`);
