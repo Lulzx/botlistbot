@@ -188,7 +188,13 @@ app.get("/bots/category/:id", async (c) => {
 });
 
 app.get("/search", async (c) => {
-  const { name, username, description } = c.req.query();
+  const rawName = c.req.query("name");
+  const rawUsername = c.req.query("username");
+  const rawDescription = c.req.query("description");
+
+  const name = rawName?.trim();
+  const username = rawUsername ? rawUsername.replace(/^@+/, "").trim() : undefined;
+  const description = rawDescription?.trim();
 
   // Validate input lengths
   if ((name && name.length < 3) || (username && username.length < 3) || (description && description.length < 3)) {
@@ -222,11 +228,11 @@ app.get("/search", async (c) => {
     params.push(`%${description}%`);
   }
 
-  const query = `SELECT * FROM bots WHERE ${conditions.join(' AND ')}`;
+  const query = `SELECT * FROM bots WHERE ${conditions.map((condition) => `(${condition})`).join(' OR ')}`;
 
   try {
     const { results } = await c.env.DB.prepare(query).bind(...params).all<Bot>();
-  return c.json(results);
+    return c.json(results);
   } catch (error) {
     console.error('Database error:', error);
     return c.json({ error: 'Internal server error' }, 500);

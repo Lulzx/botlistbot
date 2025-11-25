@@ -20,6 +20,7 @@ You can send or forward any bot <b>@username</b> to me, and I will tell you if i
 /explore - Discover random bots
 /search - Search the BotList
 /favorites - Manage your favorite bots
+/favorite - Add a bot to your favorites
 /new - Submit a new bot
 /spam - Report a spammy bot
 /newbots - See recently added bots

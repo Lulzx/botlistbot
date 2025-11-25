@@ -97,6 +97,58 @@ composer.command('favorites', async (ctx) => {
 	}
 });
 
+// /favorite command - Add a bot to favorites
+composer.command(['favorite', 'fav'], async (ctx) => {
+	const input = ctx.match?.trim();
+
+	if (!input) {
+		await ctx.reply(`${MESSAGES.FAVORITES_ADD_PROMPT}\n\nUsage: /favorite @botusername`, {
+			parse_mode: 'HTML',
+		});
+		return;
+	}
+
+	const usernameMatch = input.match(/@?(\w+)/);
+	if (!usernameMatch) {
+		await ctx.reply(MESSAGES.NEW_BOT_INVALID);
+		return;
+	}
+
+	const botUsername = usernameMatch[1];
+	const userId = ctx.from?.id;
+	if (!userId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	try {
+		const result = await postToApi<ApiResponse>(
+			`/users/${userId}/favorites`,
+			{
+				bot_username: botUsername,
+			},
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		if (result.error) {
+			if (result.error.includes('already in favorites')) {
+				await ctx.reply(MESSAGES.FAVORITES_ALREADY);
+			} else if (result.error.includes('not found')) {
+				await ctx.reply(MESSAGES.FAVORITES_NOT_FOUND);
+			} else {
+				await ctx.reply(`Error: ${result.error}`);
+			}
+			return;
+		}
+
+		await ctx.reply(MESSAGES.FAVORITES_ADDED);
+	} catch (error) {
+		console.error('Error in /favorite command:', error);
+		await ctx.reply("Sorry, I couldn't add that bot to your favorites. Please try again later.");
+	}
+});
+
 // /search command
 composer.command('search', async (ctx) => {
 	const query = ctx.match?.trim();

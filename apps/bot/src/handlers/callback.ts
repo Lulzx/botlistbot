@@ -32,6 +32,7 @@ composer.on('callback_query:data', async (ctx) => {
 		const data = ctx.callbackQuery.data;
 
 		if (data.startsWith('category:')) {
+			await ctx.answerCallbackQuery();
 			const categoryId = Number.parseInt(data.split(':')[1], 10);
 
 			if (Number.isNaN(categoryId)) {
@@ -103,7 +104,7 @@ composer.on('callback_query:data', async (ctx) => {
 
 		if (data === 'fav_add') {
 			await ctx.answerCallbackQuery();
-			await ctx.reply(MESSAGES.FAVORITES_ADD_PROMPT);
+			await ctx.reply(`${MESSAGES.FAVORITES_ADD_PROMPT}\n\nUse /favorite @username to add one instantly.`);
 			return;
 		}
 
@@ -169,7 +170,49 @@ composer.on('callback_query:data', async (ctx) => {
 
 		if (data === 'explore_fav') {
 			await ctx.answerCallbackQuery({ text: 'Send me @username to add to favorites' });
-			await ctx.reply('Send me a bot @username to add to your favorites:');
+			await ctx.reply(`${MESSAGES.FAVORITES_ADD_PROMPT}\n\nUse /favorite @username to add one instantly.`);
+			return;
+		}
+
+		if (data === 'search_more') {
+			const messageText = ctx.callbackQuery.message?.text;
+			const queryMatch = messageText?.match(/for "(.+?)":/);
+			const query = queryMatch?.[1];
+
+			if (!query) {
+				await ctx.answerCallbackQuery({ text: 'Could not find your search query. Please run /search again.' });
+				return;
+			}
+
+			const searchParams = new URLSearchParams();
+			searchParams.append('name', query);
+			searchParams.append('description', query);
+
+			const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
+
+			if (bots.length <= 10) {
+				await ctx.answerCallbackQuery({ text: 'No more results' });
+				return;
+			}
+
+			const remaining = bots.slice(10, 30);
+			const botList = remaining
+				.map((bot, index) => `${index + 11}. <b>@${bot.username}</b> - ${bot.name}`)
+				.join('\n');
+
+			const leftoverCount = bots.length - 10 - remaining.length;
+			const extraNote = leftoverCount > 0 ? `\n\n...and ${leftoverCount} more. Refine your query to narrow results.` : '';
+
+			try {
+				await ctx.editMessageReplyMarkup();
+			} catch (error) {
+				console.debug('Failed to clear inline keyboard for search results:', error);
+			}
+
+			await ctx.reply(`More results for "<b>${query}</b>":\n\n${botList}${extraNote}`, {
+				parse_mode: 'HTML',
+			});
+			await ctx.answerCallbackQuery();
 			return;
 		}
 
