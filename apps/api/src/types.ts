@@ -69,6 +69,8 @@ export interface BotSubmission {
   submitted_by: number;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  submitter_telegram_id?: number | null;
+  submitter_username?: string | null;
 }
 
 export type CategoriesResponse = Category[];

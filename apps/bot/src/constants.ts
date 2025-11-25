@@ -150,7 +150,21 @@ Use the buttons below for quick actions.
 Available commands:
 • /userinfo &lt;userId&gt; — View user profile and submissions
 • /ban &lt;userId&gt; — Ban a user
-• /unban &lt;userId&gt; — Unban a user`,
+• /unban &lt;userId&gt; — Unban a user
+• /addbot @user | Name | Description | categoryId — Add a bot
+• /updatebot @user | Name | Description | categoryId — Update a bot
+• /review — Review pending submissions`,
+	ADMIN_ADD_USAGE: '⚠️ Usage: /addbot @username | Name | Description | categoryId',
+	ADMIN_ADD_SUCCESS: '✅ Bot added to the catalog.',
+	ADMIN_ADD_EXISTS: '⚠️ This bot already exists.',
+	ADMIN_UPDATE_USAGE: '⚠️ Usage: /updatebot @username | New name | New description | categoryId',
+	ADMIN_UPDATE_SUCCESS: '✅ Bot updated.',
+	ADMIN_UPDATE_NO_CHANGES: '⚠️ Provide at least one field to update.',
+	ADMIN_REVIEW_INTRO: '🗳 <b>Pending submissions</b>',
+	ADMIN_REVIEW_EMPTY: '🎉 No pending submissions right now.',
+	ADMIN_APPROVE_SUCCESS: '✅ Submission approved and published.',
+	ADMIN_REJECT_SUCCESS: '❌ Submission rejected.',
+	ADMIN_CATEGORY_INVALID: '⚠️ Unknown category. Please provide a valid category number.',
 } as const;
 
 export const CATEGORIES = [

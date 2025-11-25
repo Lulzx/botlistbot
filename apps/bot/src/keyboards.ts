@@ -119,6 +119,8 @@ export const createAdminKeyboard = () => {
 	return new InlineKeyboard()
 		.row({ text: '👤 User info', callback_data: 'admin:userinfo' }, { text: '🚫 Ban user', callback_data: 'admin:ban' })
 		.row({ text: '♻️ Unban user', callback_data: 'admin:unban' })
+		.row({ text: '➕ Add bot', callback_data: 'admin:addbot' }, { text: '✏️ Update bot', callback_data: 'admin:updatebot' })
+		.row({ text: '🗳 Review submissions', callback_data: 'admin:review' })
 		.row({ text: '🔄 Refresh', callback_data: 'admin:panel' });
 };
 

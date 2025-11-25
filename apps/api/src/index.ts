@@ -249,6 +249,24 @@ async function getOrCreateUser(db: D1Database, telegramId: number, username?: st
   return user!;
 }
 
+const sanitizeUsername = (username: string) => username.replace(/^@+/, '').trim();
+
+async function getAdminUser(db: D1Database, adminTelegramId: number): Promise<User | null> {
+  if (!adminTelegramId) return null;
+
+  const admin = await db.prepare(
+    "SELECT * FROM users WHERE telegram_id = ?"
+  ).bind(adminTelegramId).first<User>();
+
+  if (!admin || admin.is_admin !== 1) {
+    return null;
+  }
+
+  return admin;
+}
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 app.get("/", (c) => {
   return c.text("GET /search?username=file&name=convert&description=audio");
 });
@@ -814,6 +832,287 @@ app.post("/offline-reports", async (c) => {
 });
 
 // ==================== ADMIN ENDPOINTS ====================
+
+// List pending submissions for review
+app.get("/admin/submissions/pending", async (c) => {
+  const adminId = parseInt(c.req.query('admin_id') || '0', 10);
+  const limitRaw = parseInt(c.req.query('limit') || '10', 10);
+  const limit = clampNumber(Number.isNaN(limitRaw) ? 10 : limitRaw, 1, 25);
+
+  try {
+    const admin = await getAdminUser(c.env.DB, adminId);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT s.*, u.telegram_id as submitter_telegram_id, u.username as submitter_username
+      FROM bot_submissions s
+      LEFT JOIN users u ON s.submitted_by = u.id
+      WHERE s.status = 'pending'
+      ORDER BY s.created_at ASC
+      LIMIT ?
+    `).bind(limit).all<BotSubmission>();
+
+    return c.json(results);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Approve a submission and add the bot to the catalog
+app.post("/admin/submissions/:id/approve", async (c) => {
+  const submissionId = parseInt(c.req.param('id'), 10);
+  const body = await c.req.json<{
+    admin_telegram_id: number;
+    name?: string;
+    description?: string;
+    category_id?: number;
+    username?: string;
+  }>();
+
+  if (!body.admin_telegram_id) {
+    return c.json({ error: 'admin_telegram_id is required' }, 400);
+  }
+
+  try {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
+    const submission = await c.env.DB.prepare(
+      "SELECT * FROM bot_submissions WHERE id = ?"
+    ).bind(submissionId).first<BotSubmission>();
+
+    if (!submission) {
+      return c.json({ error: 'Submission not found' }, 404);
+    }
+
+    if (submission.status !== 'pending') {
+      return c.json({ error: 'Submission already processed' }, 400);
+    }
+
+    const username = sanitizeUsername(body.username || submission.username);
+    const name = (body.name || submission.name || username).trim();
+    const description = (body.description ?? submission.description ?? '').trim();
+    const categoryId = body.category_id ?? submission.category_id ?? 1;
+
+    const categoryExists = CATEGORIES.some((cat) => cat.id === categoryId);
+    if (!categoryExists) {
+      return c.json({ error: 'Invalid category_id' }, 400);
+    }
+
+    const existingBot = await c.env.DB.prepare(
+      "SELECT id FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first();
+
+    if (existingBot) {
+      return c.json({ error: 'This bot is already in the BotList' }, 400);
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, datetime('now'), datetime('now'))`
+    ).bind(name, username, description, categoryId, submission.submitted_by).run();
+
+    await c.env.DB.prepare(
+      "UPDATE bot_submissions SET status = 'approved' WHERE id = ?"
+    ).bind(submissionId).run();
+
+    const bot = await c.env.DB.prepare(
+      "SELECT * FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first<Bot>();
+
+    return c.json(bot);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Reject a pending submission
+app.post("/admin/submissions/:id/reject", async (c) => {
+  const submissionId = parseInt(c.req.param('id'), 10);
+  const body = await c.req.json<{ admin_telegram_id: number }>();
+
+  if (!body.admin_telegram_id) {
+    return c.json({ error: 'admin_telegram_id is required' }, 400);
+  }
+
+  try {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
+    const submission = await c.env.DB.prepare(
+      "SELECT status FROM bot_submissions WHERE id = ?"
+    ).bind(submissionId).first<{ status: string }>();
+
+    if (!submission) {
+      return c.json({ error: 'Submission not found' }, 404);
+    }
+
+    if (submission.status !== 'pending') {
+      return c.json({ error: 'Submission already processed' }, 400);
+    }
+
+    await c.env.DB.prepare(
+      "UPDATE bot_submissions SET status = 'rejected' WHERE id = ?"
+    ).bind(submissionId).run();
+
+    return c.json({ success: true, message: 'Submission rejected' });
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Add a new bot directly (admin only)
+app.post("/admin/bots", async (c) => {
+  const body = await c.req.json<{
+    username: string;
+    name: string;
+    description: string;
+    category_id: number;
+    admin_telegram_id: number;
+  }>();
+
+  if (!body.username || !body.name || !body.description || !body.category_id || !body.admin_telegram_id) {
+    return c.json({ error: 'username, name, description, category_id and admin_telegram_id are required' }, 400);
+  }
+
+  try {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
+    const username = sanitizeUsername(body.username);
+    if (!username) {
+      return c.json({ error: 'Invalid username' }, 400);
+    }
+
+    const categoryExists = CATEGORIES.some((cat) => cat.id === body.category_id);
+    if (!categoryExists) {
+      return c.json({ error: 'Invalid category_id' }, 400);
+    }
+
+    const existingBot = await c.env.DB.prepare(
+      "SELECT id FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first();
+
+    if (existingBot) {
+      return c.json({ error: 'This bot is already in the BotList' }, 400);
+    }
+
+    const adminUser = await getOrCreateUser(c.env.DB, body.admin_telegram_id);
+
+    await c.env.DB.prepare(
+      `INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, datetime('now'), datetime('now'))`
+    ).bind(body.name.trim(), username, body.description.trim(), body.category_id, adminUser.id).run();
+
+    const bot = await c.env.DB.prepare(
+      "SELECT * FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first<Bot>();
+
+    return c.json(bot);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Update an existing bot (admin only)
+app.put("/admin/bots/username/:username", async (c) => {
+  const targetUsername = sanitizeUsername(c.req.param('username'));
+  const body = await c.req.json<{
+    admin_telegram_id: number;
+    name?: string;
+    description?: string;
+    category_id?: number;
+    new_username?: string;
+  }>();
+
+  if (!body.admin_telegram_id) {
+    return c.json({ error: 'admin_telegram_id is required' }, 400);
+  }
+
+  try {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
+    const bot = await c.env.DB.prepare(
+      "SELECT * FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(targetUsername).first<Bot>();
+
+    if (!bot) {
+      return c.json({ error: 'Bot not found' }, 404);
+    }
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (body.name) {
+      updates.push("name = ?");
+      params.push(body.name.trim());
+    }
+
+    if (body.description !== undefined) {
+      updates.push("description = ?");
+      params.push((body.description ?? '').trim());
+    }
+
+    if (body.category_id !== undefined) {
+      const categoryId = Number(body.category_id);
+      const categoryExists = CATEGORIES.some((cat) => cat.id === categoryId);
+      if (!categoryExists) {
+        return c.json({ error: 'Invalid category_id' }, 400);
+      }
+      updates.push("category_id = ?");
+      params.push(categoryId);
+    }
+
+    if (body.new_username) {
+      const newUsername = sanitizeUsername(body.new_username);
+      const conflict = await c.env.DB.prepare(
+        "SELECT id FROM bots WHERE LOWER(username) = LOWER(?) AND id != ?"
+      ).bind(newUsername, bot.id).first();
+
+      if (conflict) {
+        return c.json({ error: 'Username already exists' }, 400);
+      }
+
+      updates.push("username = ?");
+      params.push(newUsername);
+    }
+
+    if (updates.length === 0) {
+      return c.json({ error: 'No changes provided' }, 400);
+    }
+
+    updates.push("updated_at = datetime('now')");
+    params.push(bot.id);
+
+    await c.env.DB.prepare(
+      `UPDATE bots SET ${updates.join(', ')} WHERE id = ?`
+    ).bind(...params).run();
+
+    const updatedBot = await c.env.DB.prepare(
+      "SELECT * FROM bots WHERE id = ?"
+    ).bind(bot.id).first<Bot>();
+
+    return c.json(updatedBot);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
 
 // Ban a user
 app.post("/admin/ban", async (c) => {

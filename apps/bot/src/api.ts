@@ -39,6 +39,8 @@ export interface BotSubmission {
 	submitted_by: number;
 	status: 'pending' | 'approved' | 'rejected';
 	created_at: string;
+	submitter_telegram_id?: number | null;
+	submitter_username?: string | null;
 }
 
 export interface UserSubmissions {
@@ -166,6 +168,43 @@ export async function deleteFromApi<T>(endpoint: string, apiBaseUrl: string, api
 		return data;
 	} catch (error) {
 		console.error(`DELETE error: ${error}`);
+		throw error;
+	}
+}
+
+export async function putToApi<T>(endpoint: string, body: Record<string, unknown>, apiBaseUrl: string, apiService?: Fetcher): Promise<T> {
+	console.log(`PUT to API - endpoint: ${endpoint}`);
+
+	try {
+		let response: Response;
+
+		if (apiService) {
+			response = await apiService.fetch(
+				new Request(`https://dummy.host${endpoint}`, {
+					method: 'PUT',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(body),
+				}),
+			);
+		} else {
+			const url = `${apiBaseUrl.replace(/\/$/, '')}${endpoint}`;
+			response = await fetch(url, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(body),
+			});
+		}
+
+		console.log(`Response status: ${response.status}, statusText: ${response.statusText}`);
+
+		const data = (await response.json()) as T;
+		return data;
+	} catch (error) {
+		console.error(`PUT error: ${error}`);
 		throw error;
 	}
 }
