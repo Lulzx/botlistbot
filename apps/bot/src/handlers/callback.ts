@@ -8,6 +8,7 @@ import {
 	createEmptyFavoritesKeyboard,
 	createExploreKeyboard,
 	createFavoritesKeyboard,
+	createInlineSearchKeyboard,
 	createMainKeyboard,
 } from './../keyboards';
 
@@ -174,10 +175,15 @@ composer.on('callback_query:data', async (ctx) => {
 			return;
 		}
 
-		if (data === 'search_more') {
-			const messageText = ctx.callbackQuery.message?.text;
-			const queryMatch = messageText?.match(/for "(.+?)":/);
-			const query = queryMatch?.[1];
+		if (data === 'search_more' || data.startsWith('search_more:')) {
+			const queryFromData = data.startsWith('search_more:') ? decodeURIComponent(data.replace('search_more:', '')) : undefined;
+			let query = queryFromData;
+
+			if (!query) {
+				const messageText = ctx.callbackQuery.message?.text;
+				const queryMatch = messageText?.match(/for "<b>(.+?)<\/b>":/);
+				query = queryMatch?.[1];
+			}
 
 			if (!query) {
 				await ctx.answerCallbackQuery({ text: 'Could not find your search query. Please run /search again.' });
@@ -185,8 +191,14 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			const searchParams = new URLSearchParams();
-			searchParams.append('name', query);
-			searchParams.append('description', query);
+			const sanitizedQuery = query.replace(/^@+/, '');
+
+			if (query.startsWith('@')) {
+				searchParams.append('username', sanitizedQuery);
+			}
+
+			searchParams.append('name', sanitizedQuery);
+			searchParams.append('description', sanitizedQuery);
 
 			const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
 
@@ -211,6 +223,7 @@ composer.on('callback_query:data', async (ctx) => {
 
 			await ctx.reply(`More results for "<b>${query}</b>":\n\n${botList}${extraNote}`, {
 				parse_mode: 'HTML',
+				reply_markup: createInlineSearchKeyboard(query),
 			});
 			await ctx.answerCallbackQuery();
 			return;

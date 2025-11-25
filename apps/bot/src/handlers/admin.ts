@@ -2,6 +2,7 @@ import { Composer } from 'grammy/web';
 import { type ApiResponse, type UserInfo, fetchFromApi, postToApi } from '../api';
 import { isAdminId } from '../config';
 import { MESSAGES } from '../constants';
+import { createAdminKeyboard } from '../keyboards';
 import type { MyContext } from '../types';
 
 export const composer = new Composer<MyContext>();
@@ -26,6 +27,67 @@ async function isAdmin(ctx: MyContext): Promise<boolean> {
 		return false;
 	}
 }
+
+// /admin command - Admin panel entrypoint
+composer.command('admin', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+		return;
+	}
+
+	await ctx.reply(MESSAGES.ADMIN_PANEL, {
+		parse_mode: 'HTML',
+		reply_markup: createAdminKeyboard(),
+	});
+});
+
+composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.answerCallbackQuery({ text: 'No user found', show_alert: true });
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.answerCallbackQuery({ text: 'Admins only', show_alert: true });
+		return;
+	}
+
+	const action = ctx.match?.[1];
+
+	const replyWithPanel = async (text: string) => {
+		await ctx.reply(text, {
+			parse_mode: 'HTML',
+			reply_markup: createAdminKeyboard(),
+		});
+	};
+
+	switch (action) {
+		case 'panel':
+			await replyWithPanel(MESSAGES.ADMIN_PANEL);
+			break;
+		case 'userinfo':
+			await replyWithPanel('Send <code>/userinfo &lt;userId&gt;</code> to view a user profile and their submissions.');
+			break;
+		case 'ban':
+			await replyWithPanel('Send <code>/ban &lt;userId&gt;</code> to ban a user.');
+			break;
+		case 'unban':
+			await replyWithPanel('Send <code>/unban &lt;userId&gt;</code> to unban a user.');
+			break;
+		default:
+			await ctx.answerCallbackQuery({ text: 'Unknown admin action', show_alert: true });
+			return;
+	}
+
+	await ctx.answerCallbackQuery();
+});
 
 // /ban command
 composer.command('ban', async (ctx) => {

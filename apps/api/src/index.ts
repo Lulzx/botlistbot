@@ -121,6 +121,86 @@ INSERT OR IGNORE INTO bots (name, username, description, category_id) VALUES
 ('Reminder Bot', 'reminderbot', 'Set reminders and organize tasks', 27);
 `;
 
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL UNIQUE,
+    username TEXT,
+    first_name TEXT,
+    banned INTEGER DEFAULT 0,
+    is_admin INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS bots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    category_id INTEGER NOT NULL,
+    submitted_by INTEGER REFERENCES users(id),
+    approved INTEGER DEFAULT 1,
+    offline INTEGER DEFAULT 0,
+    spam INTEGER DEFAULT 0,
+    rating_count INTEGER DEFAULT 0,
+    rating_sum INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS bot_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    category_id INTEGER NOT NULL DEFAULT 1,
+    submitted_by INTEGER NOT NULL REFERENCES users(id),
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    bot_id INTEGER NOT NULL REFERENCES bots(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, bot_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS spam_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bot_id INTEGER NOT NULL REFERENCES bots(id),
+    reported_by INTEGER NOT NULL REFERENCES users(id),
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(bot_id, reported_by)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_bots_category ON bots(category_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_bots_created_at ON bots(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_bots_username ON bots(username)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_subscriptions_chat ON subscriptions(chat_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_spam_reports_bot ON spam_reports(bot_id)`,
+  `INSERT OR IGNORE INTO users (telegram_id, username, banned, is_admin, created_at) VALUES
+    (691609650, NULL, 0, 1, datetime('now')),
+    (62056065, NULL, 0, 1, datetime('now'))`,
+  `INSERT OR IGNORE INTO bots (name, username, description, category_id) VALUES
+    ('Bot Store Bot', 'storebot', 'The bot that started this store', 1),
+    ('File Converter Bot', 'fileconverterbot', 'Convert files between different formats', 19),
+    ('Music Bot', 'musicbot', 'Play and discover music', 13),
+    ('Weather Bot', 'weatherbot', 'Get weather forecasts', 15),
+    ('Gaming Bot', 'gamingbot', 'Play games and compete with friends', 6),
+    ('Humor Bot', 'humorbot', 'Get jokes and funny content', 5),
+    ('News Bot', 'newsbot', 'Latest news and updates', 16),
+    ('Photo Editor Bot', 'photoeditorbot', 'Edit and enhance your photos', 12),
+    ('Translation Bot', 'translatebot', 'Translate text between languages', 21),
+    ('Reminder Bot', 'reminderbot', 'Set reminders and organize tasks', 27)`
+];
+
 let dbInitPromise: Promise<void> | null = null;
 
 const ensureDatabase = (db: D1Database) => {
@@ -129,7 +209,17 @@ const ensureDatabase = (db: D1Database) => {
   dbInitPromise = (async () => {
     const existing = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").first();
     if (existing) return;
-    await db.exec(SCHEMA_SQL);
+
+    // Initialize schema sequentially; use prepare/run to avoid parser quirks in exec.
+    for (const statement of SCHEMA_STATEMENTS) {
+      try {
+        const trimmed = statement.trim().replace(/;$/, "");
+        await db.prepare(`${trimmed};`).run();
+      } catch (err) {
+        console.error('Schema exec failed for statement:', statement);
+        throw err;
+      }
+    }
   })().catch((err) => {
     dbInitPromise = null;
     throw err;

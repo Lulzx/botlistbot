@@ -6,11 +6,18 @@ import type { MyContext } from './types';
 export const createMainKeyboard = () => {
 	return new InlineKeyboard()
 		.row(
-			{ text: '❓ Help', callback_data: 'help' },
-			{ text: '🔍 Contributing', callback_data: 'contributing' },
-			{ text: '📝 Examples', callback_data: 'examples' },
+			{ text: '🔍 Search inline', switch_inline_query_current_chat: '' },
+			{ text: '📂 Categories', callback_data: 'show_categories' },
 		)
-		.row({ text: 'Try me inline!', callback_data: 'try_inline' });
+		.row(
+			{ text: '🎲 Explore', callback_data: 'explore_more' },
+			{ text: '⭐ Favorites', callback_data: 'fav_refresh' },
+		)
+		.row(
+			{ text: '❓ Help', callback_data: 'help' },
+			{ text: '📣 Contributing', callback_data: 'contributing' },
+			{ text: '📝 Examples', callback_data: 'examples' },
+		);
 };
 
 export const createCategoriesKeyboard = async (_ctx: MyContext) => {
@@ -80,18 +87,39 @@ export const createBotListKeyboard = (bots: Bot[], prefix = 'bot') => {
 	return keyboard;
 };
 
-export const createSearchResultsKeyboard = (bots: Bot[]) => {
+export const createSearchResultsKeyboard = (bots: Bot[], query?: string) => {
 	const keyboard = new InlineKeyboard();
 
 	for (const bot of bots.slice(0, 10)) {
 		keyboard.row({ text: `@${bot.username} - ${bot.name}`, url: `https://t.me/${bot.username}` });
 	}
 
+	if (query) {
+		keyboard.row(
+			{ text: '🔍 Search inline here', switch_inline_query_current_chat: query },
+			{ text: '↗️ Share inline', switch_inline_query: query },
+		);
+	}
+
 	if (bots.length > 10) {
-		keyboard.row({ text: `📋 ${bots.length - 10} more results...`, callback_data: 'search_more' });
+		const callbackData = query ? `search_more:${encodeURIComponent(query)}` : 'search_more';
+		keyboard.row({ text: `📋 ${bots.length - 10} more results...`, callback_data: callbackData });
 	}
 
 	return keyboard;
+};
+
+export const createInlineSearchKeyboard = (prefill = '') => {
+	return new InlineKeyboard()
+		.row({ text: '🔍 Search inline in this chat', switch_inline_query_current_chat: prefill })
+		.row({ text: '❌ Cancel', callback_data: 'cancel_action' });
+};
+
+export const createAdminKeyboard = () => {
+	return new InlineKeyboard()
+		.row({ text: '👤 User info', callback_data: 'admin:userinfo' }, { text: '🚫 Ban user', callback_data: 'admin:ban' })
+		.row({ text: '♻️ Unban user', callback_data: 'admin:unban' })
+		.row({ text: '🔄 Refresh', callback_data: 'admin:panel' });
 };
 
 export const createMyBotsKeyboard = () => {

@@ -2,10 +2,10 @@ export const MESSAGES = {
 	WELCOME: `I'm the bot in charge of maintaining the <b>@BotList</b> channel, the most reliable and unbiased bot catalog out there. I was built to simplify navigation and to automate the process of submitting, reviewing and publishing bots by the <b>@BotListChat</b> community.
 
 🔘 <b>First steps:</b>
-1️⃣ Start off by using the <b>/category</b> command and use the available buttons from there on.
-2️⃣ Send individual <b>@BotList</b> categories to your friends via inline search (i.e. type <b>@botlistbot music</b> in any chat).
+1️⃣ Tap <b>Search inline</b> below to find bots without leaving the chat.
+2️⃣ Browse <b>/category</b> or share categories inline (type <b>@botlistbot music</b> in any chat).
 3️⃣ Add me to your groups and <b>/subscribe</b> to BotList updates.
-4️⃣ Join the <b>@BotListChat</b> community and contribute to the BotList with <b>/new @yourbot</b>
+4️⃣ Join the <b>@BotListChat</b> community and contribute with <b>/new @yourbot</b>.
 
 You can send or forward any bot <b>@username</b> to me, and I will tell you if it exists in the <b>@BotList</b>.
 
@@ -69,10 +69,11 @@ There are also the corresponding <b>/new</b>, <b>/offline</b> and <b>/spam</b> c
 	FAVORITES_NOT_FOUND: '❌ This bot is not in the BotList database.',
 	FAVORITES_ALREADY: '⚠️ This bot is already in your favorites.',
 
-	SEARCH_PROMPT: '🔍 <b>Search the BotList</b>\n\nSend me a search query (bot name, username, or description):',
+	SEARCH_PROMPT:
+		'🔍 <b>Search the BotList</b>\n\nType a bot name, @username, or keyword. Use the inline button below to search without sending a command.',
 	SEARCH_RESULTS: '🔍 <b>Search Results</b>',
-	SEARCH_EMPTY: '🤷 No bots found matching your query.',
-	SEARCH_TOO_SHORT: '⚠️ Please enter at least 3 characters to search.',
+	SEARCH_EMPTY: '🤷 No bots found matching your query. Try a different keyword or open inline search below.',
+	SEARCH_TOO_SHORT: '⚠️ Please enter at least 3 characters (e.g. music, @weatherbot).',
 
 	NEW_BOT_PROMPT: `📝 <b>Submit a New Bot</b>
 
@@ -142,6 +143,14 @@ Violating these rules may result in being banned from the bot and chat.`,
 	ADMIN_USERINFO_USAGE: '⚠️ Usage: /userinfo {userId}',
 	ADMIN_USERINFO_NOT_FOUND: '❌ User not found.',
 	ADMIN_UNAUTHORIZED: '🚫 You are not authorized to use this command.',
+	ADMIN_PANEL: `🛡 <b>Admin Panel</b>
+
+Use the buttons below for quick actions.
+
+Available commands:
+• /userinfo &lt;userId&gt; — View user profile and submissions
+• /ban &lt;userId&gt; — Ban a user
+• /unban &lt;userId&gt; — Unban a user`,
 } as const;
 
 export const CATEGORIES = [

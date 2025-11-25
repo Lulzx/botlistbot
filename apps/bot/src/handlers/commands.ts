@@ -1,13 +1,13 @@
 import { Composer } from 'grammy/web';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
-import { MESSAGES } from '../constants';
+import { CATEGORY_NAMES, MESSAGES } from '../constants';
 import {
 	createBotListKeyboard,
-	createCancelKeyboard,
 	createCategoriesKeyboard,
 	createEmptyFavoritesKeyboard,
 	createExploreKeyboard,
 	createFavoritesKeyboard,
+	createInlineSearchKeyboard,
 	createMainKeyboard,
 	createSearchResultsKeyboard,
 } from '../keyboards';
@@ -156,37 +156,48 @@ composer.command('search', async (ctx) => {
 	if (!query) {
 		await ctx.reply(MESSAGES.SEARCH_PROMPT, {
 			parse_mode: 'HTML',
-			reply_markup: createCancelKeyboard(),
+			reply_markup: createInlineSearchKeyboard(),
 		});
 		return;
 	}
 
 	if (query.length < 3) {
-		await ctx.reply(MESSAGES.SEARCH_TOO_SHORT);
+		await ctx.reply(MESSAGES.SEARCH_TOO_SHORT, {
+			reply_markup: createInlineSearchKeyboard(query),
+		});
 		return;
 	}
 
 	try {
 		const searchParams = new URLSearchParams();
-		searchParams.append('name', query);
-		searchParams.append('description', query);
+		const sanitizedQuery = query.replace(/^@+/, '');
+
+		if (query.startsWith('@')) {
+			searchParams.append('username', sanitizedQuery);
+		}
+
+		searchParams.append('name', sanitizedQuery);
+		searchParams.append('description', sanitizedQuery);
 
 		const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
 
 		if (bots.length === 0) {
-			await ctx.reply(MESSAGES.SEARCH_EMPTY);
+			await ctx.reply(MESSAGES.SEARCH_EMPTY, {
+				reply_markup: createInlineSearchKeyboard(query),
+			});
 			return;
 		}
 
-		const botList = bots
-			.slice(0, 10)
-			.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`)
-			.join('\n');
+		const botList = bots.slice(0, 10).map((bot, index) => {
+			const category = CATEGORY_NAMES[bot.category_id] || 'Uncategorized';
+			const description = bot.description ? `${bot.description.slice(0, 80)}${bot.description.length > 80 ? '...' : ''}` : 'No description';
+			return `${index + 1}. <b>${bot.name}</b> (@${bot.username})\n   ${category} • ${description}`;
+		});
 		const moreText = bots.length > 10 ? `\n\n<i>...and ${bots.length - 10} more results</i>` : '';
 
-		await ctx.reply(`${MESSAGES.SEARCH_RESULTS} for "<b>${query}</b>":\n\n${botList}${moreText}`, {
+		await ctx.reply(`${MESSAGES.SEARCH_RESULTS} for "<b>${query}</b>":\n\n${botList.join('\n\n')}${moreText}`, {
 			parse_mode: 'HTML',
-			reply_markup: createSearchResultsKeyboard(bots),
+			reply_markup: createSearchResultsKeyboard(bots, query),
 		});
 	} catch (error) {
 		console.error('Error in /search command:', error);
