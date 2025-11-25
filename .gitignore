@@ -1,14 +1,37 @@
-__pycache__
+# Dependencies
+node_modules/
+
+# Turbo
+.turbo
+
+# Build outputs
+dist/
+.wrangler/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+.editorconfig
+
+# OS
 .DS_Store
+
+# Lock files
+package-lock.json
+bun.lock
+
+# Python
+__pycache__
+
+# Project specific
 *.sql
 bots.json
 category.json
 data/
-node_modules/
-package-lock.json
-bun.lock
-.env
-.editorconfig
-.vscode
-bot/worker-configuration.d.ts
+apps/bot/worker-configuration.d.ts
 setup.sh

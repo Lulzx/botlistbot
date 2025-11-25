@@ -1,0 +1,22 @@
+{
+  "name": "botlistbot",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "deploy": "turbo run deploy",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev:api": "turbo run dev --filter=api",
+    "dev:bot": "turbo run dev --filter=bot",
+    "deploy:api": "turbo run deploy --filter=api",
+    "deploy:bot": "turbo run deploy --filter=bot"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  },
+  "packageManager": "bun@1.1.0"
+}
