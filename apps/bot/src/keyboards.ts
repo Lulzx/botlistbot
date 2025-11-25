@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import { Category } from './api';
+import type { Bot } from './api';
 import { CATEGORIES } from './constants';
 import type { MyContext } from './types';
 
@@ -13,7 +13,7 @@ export const createMainKeyboard = () => {
 		.row({ text: 'Try me inline!', callback_data: 'try_inline' });
 };
 
-export const createCategoriesKeyboard = async (ctx: MyContext) => {
+export const createCategoriesKeyboard = async (_ctx: MyContext) => {
 	try {
 		const keyboard = new InlineKeyboard();
 
@@ -29,4 +29,88 @@ export const createCategoriesKeyboard = async (ctx: MyContext) => {
 		console.error('Failed to build categories keyboard:', error);
 		throw new Error('Failed to load categories.');
 	}
+};
+
+export const createFavoritesKeyboard = (favorites: Bot[]) => {
+	const keyboard = new InlineKeyboard();
+
+	// Add buttons for each favorite bot
+	for (const bot of favorites.slice(0, 10)) {
+		keyboard.row(
+			{ text: `@${bot.username}`, url: `https://t.me/${bot.username}` },
+			{ text: '❌ Remove', callback_data: `fav_remove:${bot.username}` },
+		);
+	}
+
+	keyboard.row({ text: '➕ Add Bot', callback_data: 'fav_add' }, { text: '🔄 Refresh', callback_data: 'fav_refresh' });
+
+	return keyboard;
+};
+
+export const createEmptyFavoritesKeyboard = () => {
+	return new InlineKeyboard()
+		.row({ text: '➕ Add Bot to Favorites', callback_data: 'fav_add' })
+		.row({ text: '📂 Browse Categories', callback_data: 'show_categories' });
+};
+
+export const createExploreKeyboard = (bots: Bot[]) => {
+	const keyboard = new InlineKeyboard();
+
+	for (const bot of bots) {
+		keyboard.row({ text: `@${bot.username} - ${bot.name}`, url: `https://t.me/${bot.username}` });
+	}
+
+	keyboard.row({ text: '🔄 Show More', callback_data: 'explore_more' }, { text: '⭐️ Add to Favorites', callback_data: 'explore_fav' });
+
+	return keyboard;
+};
+
+export const createBotListKeyboard = (bots: Bot[], prefix = 'bot') => {
+	const keyboard = new InlineKeyboard();
+
+	for (const bot of bots.slice(0, 10)) {
+		const rating = bot.avg_rating ? ` (${bot.avg_rating.toFixed(1)}⭐)` : '';
+		keyboard.row({ text: `@${bot.username} - ${bot.name}${rating}`, url: `https://t.me/${bot.username}` });
+	}
+
+	if (bots.length > 10) {
+		keyboard.row({ text: `📋 Show all ${bots.length} bots`, callback_data: `${prefix}_showall` });
+	}
+
+	return keyboard;
+};
+
+export const createSearchResultsKeyboard = (bots: Bot[]) => {
+	const keyboard = new InlineKeyboard();
+
+	for (const bot of bots.slice(0, 10)) {
+		keyboard.row({ text: `@${bot.username} - ${bot.name}`, url: `https://t.me/${bot.username}` });
+	}
+
+	if (bots.length > 10) {
+		keyboard.row({ text: `📋 ${bots.length - 10} more results...`, callback_data: 'search_more' });
+	}
+
+	return keyboard;
+};
+
+export const createMyBotsKeyboard = () => {
+	return new InlineKeyboard()
+		.row({ text: '➕ Submit New Bot', callback_data: 'submit_new_bot' })
+		.row({ text: '📊 View Statistics', callback_data: 'mybots_stats' });
+};
+
+export const createCancelKeyboard = () => {
+	return new InlineKeyboard().row({ text: '❌ Cancel', callback_data: 'cancel_action' });
+};
+
+export const createBackKeyboard = (callback: string) => {
+	return new InlineKeyboard().row({ text: '« Back', callback_data: callback });
+};
+
+export const createConfirmKeyboard = (confirmCallback: string, cancelCallback = 'cancel_action') => {
+	return new InlineKeyboard().row(
+		{ text: '✅ Confirm', callback_data: confirmCallback },
+		{ text: '❌ Cancel', callback_data: cancelCallback },
+	);
 };

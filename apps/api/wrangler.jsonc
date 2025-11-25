@@ -1,0 +1,19 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "botlist-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-02",
+	"observability": {
+		"enabled": true
+	},
+	"placement": {
+		"mode": "smart"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "botlist-api-db",
+			"database_id": "74d93525-a5c0-462c-bcfb-9f8a0d7451f4"
+		}
+	]
+}
