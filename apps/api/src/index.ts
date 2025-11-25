@@ -1,14 +1,7 @@
 import { Hono } from "hono";
 import { HonoContext, Category, Bot } from "./types";
 
-const app = new Hono<HonoContext>()
-
-app.get("/", (c) => {
-  return c.text("GET /search?username=file&name=convert&description=audio");
-});
-
-app.get("/categories", (c) => {
-  const categories: Category[] = [
+const CATEGORIES: Category[] = [
     { id: 1, name: "🌿 Miscellaneous" },
     { id: 2, name: "👥 Social" },
     { id: 3, name: "🙋‍♂️ Promoting" },
@@ -39,7 +32,14 @@ app.get("/categories", (c) => {
     { id: 28, name: "⚙️ Tools" }
   ];
 
-  return c.json(categories);
+const app = new Hono<HonoContext>()
+
+app.get("/", (c) => {
+  return c.text("GET /search?username=file&name=convert&description=audio");
+});
+
+app.get("/categories", (c) => {
+  return c.json(CATEGORIES);
 });
 
 app.get("/gimme", async (c) => {
@@ -65,24 +65,47 @@ app.get("/bots/category/:id", async (c) => {
 app.get("/search", async (c) => {
   const { name, username, description } = c.req.query();
 
-  if (name?.length < 3 || username?.length < 3 || description?.length < 3) {
-    return c.text("minimum query length allowed is 3.");
-  } else if (username?.toLowerCase() === "bot") {
-    return c.text("hmm... bot? be specific please!");
-  } else if (!name && !username && !description) return c.json([]);
+  // Validate input lengths
+  if ((name && name.length < 3) || (username && username.length < 3) || (description && description.length < 3)) {
+    return c.json({ error: "minimum query length allowed is 3." }, 400);
+  } 
+  
+  if (username?.toLowerCase() === "bot") {
+    return c.json({ error: "hmm... bot? be specific please!" }, 400);
+  } 
+  
+  if (!name && !username && !description) {
+    return c.json([]);
+  }
 
-  const QUERY = `SELECT *
-  FROM bots
-  WHERE
-      instr(lower(name), lower(COALESCE(:name, '')))
-      AND
-      instr(lower(username), lower(COALESCE(:username, '')))
-      AND
-      instr(lower(description), lower(COALESCE(:description, '')));`
+  // Build dynamic query with proper parameter binding
+  const conditions = [];
+  const params = [];
 
-  const { results } = await c.env.DB.prepare(QUERY).bind(name ?? '', username ?? '', description ?? '').all<Bot>();
+  if (name) {
+    conditions.push("LOWER(name) LIKE LOWER(?)");
+    params.push(`%${name}%`);
+  }
+  
+  if (username) {
+    conditions.push("LOWER(username) LIKE LOWER(?)");
+    params.push(`%${username}%`);
+  }
+  
+  if (description) {
+    conditions.push("LOWER(description) LIKE LOWER(?)");
+    params.push(`%${description}%`);
+  }
 
+  const query = `SELECT * FROM bots WHERE ${conditions.join(' AND ')}`;
+
+  try {
+    const { results } = await c.env.DB.prepare(query).bind(...params).all<Bot>();
   return c.json(results);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
 });
 
 export default app;
