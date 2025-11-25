@@ -1,0 +1,20 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "botlist-bot",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-02",
+	"vars": {
+		"API_BASE_URL": "https://botlist-api.lulz.workers.dev"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"placement": {
+		"mode": "smart"
+	},
+	"services": [
+		{ "binding": "API", "service": "botlist-api" }
+	]
+	// Note: BOT_TOKEN should be set as a secret, not in vars
+	// Run: wrangler secret put BOT_TOKEN --cwd apps/bot
+}
