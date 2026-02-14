@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import type { Bot } from './api';
+import type { Bot, Suggestion } from './api';
 import { CATEGORIES } from './constants';
 import type { MyContext } from './types';
 
@@ -121,6 +121,8 @@ export const createAdminKeyboard = () => {
 		.row({ text: '♻️ Unban user', callback_data: 'admin:unban' })
 		.row({ text: '➕ Add bot', callback_data: 'admin:addbot' }, { text: '✏️ Update bot', callback_data: 'admin:updatebot' })
 		.row({ text: '🗳 Review submissions', callback_data: 'admin:review' })
+		.row({ text: '💡 Review suggestions', callback_data: 'admin:suggestions' })
+		.row({ text: '📊 Statistics', callback_data: 'admin:stats' })
 		.row({ text: '🔄 Refresh', callback_data: 'admin:panel' });
 };
 
@@ -142,5 +144,33 @@ export const createConfirmKeyboard = (confirmCallback: string, cancelCallback = 
 	return new InlineKeyboard().row(
 		{ text: '✅ Confirm', callback_data: confirmCallback },
 		{ text: '❌ Cancel', callback_data: cancelCallback },
+	);
+};
+
+export const createSuggestionActionsKeyboard = (botUsername: string) => {
+	return new InlineKeyboard()
+		.row(
+			{ text: '📝 Name', callback_data: `suggest:${botUsername}:name` },
+			{ text: '📋 Description', callback_data: `suggest:${botUsername}:description` },
+		)
+		.row(
+			{ text: '📂 Category', callback_data: `suggest:${botUsername}:category` },
+			{ text: '🔌 Offline', callback_data: `suggest:${botUsername}:offline` },
+		)
+		.row(
+			{ text: '🚨 Spam', callback_data: `suggest:${botUsername}:spam` },
+			{ text: '🔎 Inline Queries', callback_data: `suggest:${botUsername}:inlinequeries` },
+		)
+		.row(
+			{ text: '🏷 Add Keyword', callback_data: `suggest:${botUsername}:add_keyword` },
+			{ text: '🗑 Remove Keyword', callback_data: `suggest:${botUsername}:remove_keyword` },
+		)
+		.row({ text: '❌ Cancel', callback_data: 'cancel_action' });
+};
+
+export const createSuggestionReviewKeyboard = (suggestion: Suggestion) => {
+	return new InlineKeyboard().row(
+		{ text: '✅ Accept', callback_data: `admin:suggest_accept:${suggestion.id}` },
+		{ text: '❌ Reject', callback_data: `admin:suggest_reject:${suggestion.id}` },
 	);
 };

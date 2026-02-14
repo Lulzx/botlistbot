@@ -1,8 +1,8 @@
 import { Composer } from 'grammy/web';
-import { GrammyError } from 'grammy';
-import { type ApiResponse, type Bot, deleteFromApi, fetchFromApi } from '../api';
+import { GrammyError, InlineKeyboard } from 'grammy';
+import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
 import type { MyContext } from '../types';
-import { CATEGORY_NAMES, MESSAGES } from './../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from './../constants';
 import {
 	createCategoriesKeyboard,
 	createEmptyFavoritesKeyboard,
@@ -10,6 +10,7 @@ import {
 	createFavoritesKeyboard,
 	createInlineSearchKeyboard,
 	createMainKeyboard,
+	createMyBotsKeyboard,
 } from './../keyboards';
 
 export const composer = new Composer<MyContext>();
@@ -226,6 +227,138 @@ composer.on('callback_query:data', async (ctx) => {
 				reply_markup: createInlineSearchKeyboard(query),
 			});
 			await ctx.answerCallbackQuery();
+			return;
+		}
+
+		// Handle suggestion action callbacks (suggest:username:action)
+		if (data.startsWith('suggest:')) {
+			const parts = data.split(':');
+			if (parts.length >= 3) {
+				const botUsername = parts[1];
+				const action = parts[2];
+				const userId = ctx.from?.id;
+
+				if (!userId) {
+					await ctx.answerCallbackQuery({ text: 'Could not identify user' });
+					return;
+				}
+
+				// For value-less actions (offline, spam, inlinequeries), submit directly
+				const directActions = ['offline', 'spam', 'inlinequeries'];
+				if (directActions.includes(action)) {
+					try {
+						const result = await postToApi<ApiResponse>(
+							'/suggestions',
+							{
+								telegram_id: userId,
+								bot_username: botUsername,
+								action,
+								value: 'true',
+							},
+							ctx.env.API_BASE_URL,
+							ctx.env.API,
+						);
+
+						if (result.error) {
+							await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
+							return;
+						}
+
+						await ctx.answerCallbackQuery({ text: MESSAGES.SUGGEST_SUCCESS });
+						await ctx.editMessageText(MESSAGES.SUGGEST_SUCCESS, { parse_mode: 'HTML' });
+					} catch (error) {
+						console.error('Error submitting suggestion:', error);
+						await ctx.answerCallbackQuery({ text: 'Failed to submit suggestion', show_alert: true });
+					}
+					return;
+				}
+
+				// For value-based actions, prompt for text input
+				await ctx.answerCallbackQuery();
+
+				// Store the pending suggestion context in the message text so the user knows what to reply with
+				const actionLabel = action === 'add_keyword' ? 'keyword to add' :
+					action === 'remove_keyword' ? 'keyword to remove' :
+					action;
+
+				await ctx.editMessageText(
+					MESSAGES.SUGGEST_ENTER_VALUE
+						.replace('{action}', actionLabel)
+						.replace('{username}', botUsername) +
+					`\n\n<i>Reply to this message with the new value.</i>`,
+					{ parse_mode: 'HTML' },
+				);
+			}
+			return;
+		}
+
+		// Handle easteregg_more callback
+		if (data === 'easteregg_more') {
+			const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+			const names: string[] = [];
+			for (let i = 0; i < 5; i++) {
+				const adj = pick(EASTER_EGG_ADJECTIVES);
+				const noun = pick(EASTER_EGG_NOUNS);
+				const ending = pick(EASTER_EGG_ENDINGS);
+				names.push(`@${adj}${noun}${ending}`);
+			}
+
+			const keyboard = new InlineKeyboard();
+			for (const name of names) {
+				keyboard.row({ text: name, url: `https://t.me/${name.replace('@', '')}` });
+			}
+			keyboard.row({ text: '🎲 Generate More', callback_data: 'easteregg_more' });
+
+			await safeEditMessageText(ctx, '🥚 <b>Your random bot name ideas:</b>\n\n' + names.join('\n'), {
+				parse_mode: 'HTML',
+				reply_markup: keyboard,
+			});
+			await ctx.answerCallbackQuery();
+			return;
+		}
+
+		// Handle mybots_stats callback
+		if (data === 'mybots_stats') {
+			const userId = ctx.from?.id;
+			if (!userId) {
+				await ctx.answerCallbackQuery({ text: 'Could not identify user' });
+				return;
+			}
+
+			try {
+				const submissions = await fetchFromApi<UserSubmissions>(`/users/${userId}/submissions`, ctx.env.API_BASE_URL, ctx.env.API);
+				const { approved, pending } = submissions;
+
+				let message = '📊 <b>Your Bot Statistics</b>\n\n';
+				message += `Approved bots: ${approved.length}\n`;
+				message += `Pending review: ${pending.length}\n`;
+
+				if (approved.length > 0) {
+					message += '\n<b>Your Bots:</b>\n';
+					for (const bot of approved) {
+						const category = CATEGORY_NAMES[bot.category_id] || 'Uncategorized';
+						message += `• @${bot.username} — ${category}\n`;
+					}
+				}
+
+				await safeEditMessageText(ctx, message, {
+					parse_mode: 'HTML',
+					reply_markup: createMyBotsKeyboard(),
+				});
+			} catch (error) {
+				console.error('Error fetching mybots stats:', error);
+				await ctx.answerCallbackQuery({ text: 'Failed to load stats', show_alert: true });
+				return;
+			}
+			await ctx.answerCallbackQuery();
+			return;
+		}
+
+		// Handle submit_new_bot callback
+		if (data === 'submit_new_bot') {
+			await ctx.answerCallbackQuery();
+			await ctx.reply(MESSAGES.NEW_BOT_PROMPT, { parse_mode: 'HTML' });
 			return;
 		}
 

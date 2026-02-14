@@ -1,6 +1,7 @@
 import { Composer } from 'grammy/web';
+import { InlineKeyboard } from 'grammy';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
-import { CATEGORY_NAMES, MESSAGES } from '../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from '../constants';
 import {
 	createBotListKeyboard,
 	createCategoriesKeyboard,
@@ -10,8 +11,10 @@ import {
 	createInlineSearchKeyboard,
 	createMainKeyboard,
 	createSearchResultsKeyboard,
+	createSuggestionActionsKeyboard,
 } from '../keyboards';
 import type { MyContext } from '../types';
+import { trackActivity } from '../tracking';
 
 export const composer = new Composer<MyContext>();
 
@@ -49,6 +52,8 @@ composer.command('explore', async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'explore');
+
 		const botList = bots
 			.map(
 				(bot) =>
@@ -84,6 +89,8 @@ composer.command('favorites', async (ctx) => {
 			});
 			return;
 		}
+
+		trackActivity(ctx, 'favorites');
 
 		const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
 
@@ -142,6 +149,7 @@ composer.command(['favorite', 'fav'], async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'favorite_add', botUsername);
 		await ctx.reply(MESSAGES.FAVORITES_ADDED);
 	} catch (error) {
 		console.error('Error in /favorite command:', error);
@@ -180,6 +188,8 @@ composer.command('search', async (ctx) => {
 		searchParams.append('description', sanitizedQuery);
 
 		const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
+
+		trackActivity(ctx, 'search', query);
 
 		if (bots.length === 0) {
 			await ctx.reply(MESSAGES.SEARCH_EMPTY, {
@@ -262,6 +272,7 @@ composer.command('new', async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'submission', username);
 		await ctx.reply(MESSAGES.NEW_BOT_SUCCESS);
 	} catch (error) {
 		console.error('Error in /new command:', error);
@@ -317,6 +328,7 @@ composer.command('spam', async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'spam_report', username);
 		await ctx.reply(MESSAGES.SPAM_SUCCESS);
 	} catch (error) {
 		console.error('Error in /spam command:', error);
@@ -372,6 +384,7 @@ composer.command('offline', async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'offline_report', username);
 		await ctx.reply(MESSAGES.OFFLINE_SUCCESS);
 	} catch (error) {
 		console.error('Error in /offline command:', error);
@@ -500,6 +513,7 @@ composer.command('subscribe', async (ctx) => {
 			return;
 		}
 
+		trackActivity(ctx, 'subscribe');
 		await ctx.reply(MESSAGES.SUBSCRIBE_SUCCESS);
 	} catch (error) {
 		console.error('Error in /subscribe command:', error);
@@ -539,5 +553,64 @@ composer.command('unsubscribe', async (ctx) => {
 composer.command('rules', async (ctx) => {
 	await ctx.reply(MESSAGES.RULES, {
 		parse_mode: 'HTML',
+	});
+});
+
+// /suggest command - Suggest an edit to a bot
+composer.command('suggest', async (ctx) => {
+	const input = ctx.match?.trim();
+
+	if (!input) {
+		await ctx.reply(MESSAGES.SUGGEST_PROMPT, { parse_mode: 'HTML' });
+		return;
+	}
+
+	const usernameMatch = input.match(/@?(\w+)/);
+	if (!usernameMatch) {
+		await ctx.reply(MESSAGES.NEW_BOT_INVALID);
+		return;
+	}
+
+	const botUsername = usernameMatch[1];
+
+	// Verify bot exists
+	try {
+		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${botUsername}`, ctx.env.API_BASE_URL, ctx.env.API);
+
+		if ('error' in bot) {
+			await ctx.reply(MESSAGES.SUGGEST_BOT_NOT_FOUND);
+			return;
+		}
+
+		await ctx.reply(MESSAGES.SUGGEST_PICK_ACTION.replace('{username}', botUsername), {
+			parse_mode: 'HTML',
+			reply_markup: createSuggestionActionsKeyboard(botUsername),
+		});
+	} catch {
+		await ctx.reply(MESSAGES.SUGGEST_BOT_NOT_FOUND);
+	}
+});
+
+// /easteregg command - Generate a fun bot username
+composer.command('easteregg', async (ctx) => {
+	const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+	const names: string[] = [];
+	for (let i = 0; i < 5; i++) {
+		const adj = pick(EASTER_EGG_ADJECTIVES);
+		const noun = pick(EASTER_EGG_NOUNS);
+		const ending = pick(EASTER_EGG_ENDINGS);
+		names.push(`@${adj}${noun}${ending}`);
+	}
+
+	const keyboard = new InlineKeyboard();
+	for (const name of names) {
+		keyboard.row({ text: name, url: `https://t.me/${name.replace('@', '')}` });
+	}
+	keyboard.row({ text: '🎲 Generate More', callback_data: 'easteregg_more' });
+
+	await ctx.reply('🥚 <b>Your random bot name ideas:</b>\n\n' + names.join('\n'), {
+		parse_mode: 'HTML',
+		reply_markup: keyboard,
 	});
 });

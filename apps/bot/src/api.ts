@@ -16,6 +16,9 @@ export interface Bot {
 	rating_count?: number;
 	rating_sum?: number;
 	avg_rating?: number;
+	country_id?: number;
+	inlinequeries?: number;
+	keywords?: string[];
 	created_at: string;
 	updated_at: string;
 }
@@ -53,6 +56,54 @@ export interface UserInfo {
 	submitted_bots: Bot[];
 	pending_submissions: BotSubmission[];
 	spam_reports: Array<{ id: number; bot_id: number; bot_username: string; reason?: string; created_at: string }>;
+}
+
+export interface Suggestion {
+	id: number;
+	user_id: number;
+	bot_id: number;
+	action: string;
+	value?: string;
+	executed: number;
+	created_at: string;
+	bot_username?: string;
+	bot_name?: string;
+	user_telegram_id?: number;
+	username?: string;
+}
+
+export interface Keyword {
+	id: number;
+	name: string;
+	bot_id: number;
+	created_at: string;
+}
+
+export interface StatisticEntry {
+	id: number;
+	user_id?: number;
+	action: string;
+	entity?: string;
+	level: number;
+	created_at: string;
+	user_telegram_id?: number;
+	username?: string;
+}
+
+export interface StatisticsSummary {
+	actions: Array<{ action: string; count: number }>;
+	totals: {
+		bots: number;
+		users: number;
+		favorites: number;
+		pending_suggestions: number;
+	};
+}
+
+export interface Country {
+	id: number;
+	name: string;
+	emoji: string;
 }
 
 export interface ApiResponse {

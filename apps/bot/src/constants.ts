@@ -23,12 +23,15 @@ You can send or forward any bot <b>@username</b> to me, and I will tell you if i
 /favorite - Add a bot to your favorites
 /new - Submit a new bot
 /spam - Report a spammy bot
+/offline - Report an offline bot
+/suggest - Suggest an edit to a bot
 /newbots - See recently added bots
 /bestbots - View top-rated bots
 /mybots - See your submitted bots
 /subscribe - Get update notifications
 /unsubscribe - Disable notifications
 /rules - View BotListChat rules
+/easteregg - Generate a fun bot name
 
 <b>Try me inline:</b> Type <b>@botlistbot</b> in any chat to search!`,
 
@@ -134,6 +137,13 @@ To submit a bot, send me the bot's @username followed by a description.
 
 Violating these rules may result in being banned from the bot and chat.`,
 
+	// Suggestion messages
+	SUGGEST_PROMPT: '💡 <b>Suggest an Edit</b>\n\nUsage: /suggest @botusername\n\nPick a bot, then choose what you want to suggest changing.',
+	SUGGEST_PICK_ACTION: '💡 <b>What would you like to suggest for @{username}?</b>\n\nChoose an action below:',
+	SUGGEST_ENTER_VALUE: '✏️ Please enter the new <b>{action}</b> value for @{username}:',
+	SUGGEST_SUCCESS: '✅ Thank you! Your suggestion has been submitted for review.',
+	SUGGEST_BOT_NOT_FOUND: '❌ This bot is not in the BotList database.',
+
 	// Admin messages
 	ADMIN_BAN_SUCCESS: '✅ User has been banned.',
 	ADMIN_BAN_USAGE: '⚠️ Usage: /ban {userId}',
@@ -153,7 +163,11 @@ Available commands:
 • /unban &lt;userId&gt; — Unban a user
 • /addbot @user | Name | Description | categoryId — Add a bot
 • /updatebot @user | Name | Description | categoryId — Update a bot
-• /review — Review pending submissions`,
+• /addkeyword @bot keyword — Add a keyword to a bot
+• /removekeyword @bot keyword — Remove a keyword
+• /review — Review pending submissions
+• /suggestions — Review pending suggestions
+• /stats — View activity statistics`,
 	ADMIN_ADD_USAGE: '⚠️ Usage: /addbot @username | Name | Description | categoryId',
 	ADMIN_ADD_SUCCESS: '✅ Bot added to the catalog.',
 	ADMIN_ADD_EXISTS: '⚠️ This bot already exists.',
@@ -165,6 +179,20 @@ Available commands:
 	ADMIN_APPROVE_SUCCESS: '✅ Submission approved and published.',
 	ADMIN_REJECT_SUCCESS: '❌ Submission rejected.',
 	ADMIN_CATEGORY_INVALID: '⚠️ Unknown category. Please provide a valid category number.',
+	ADMIN_KEYWORD_USAGE: '⚠️ Usage: /addkeyword @botusername keyword',
+	ADMIN_KEYWORD_ADDED: '✅ Keyword added.',
+	ADMIN_KEYWORD_REMOVED: '✅ Keyword removed.',
+	ADMIN_SUGGESTIONS_INTRO: '💡 <b>Pending suggestions</b>',
+	ADMIN_SUGGESTIONS_EMPTY: '🎉 No pending suggestions right now.',
+	ADMIN_SUGGESTION_ACCEPTED: '✅ Suggestion accepted and applied.',
+	ADMIN_SUGGESTION_REJECTED: '❌ Suggestion rejected.',
+	ADMIN_STATS_EMPTY: 'No activity recorded yet.',
+
+	// Broadcast messages
+	BROADCAST_PROMPT: '📢 <b>Broadcast</b>\n\nSend me the message to broadcast to all subscribers:',
+	BROADCAST_CONFIRM: '📢 <b>Preview:</b>\n\n{text}\n\n<b>Send to all subscribers?</b>',
+	BROADCAST_SENT: '✅ Broadcast sent to {count} subscribers.',
+	BROADCAST_CANCELLED: '❌ Broadcast cancelled.',
 } as const;
 
 export const CATEGORIES = [
@@ -199,3 +227,53 @@ export const CATEGORIES = [
 ] as const;
 
 export const CATEGORY_NAMES = Object.fromEntries(CATEGORIES.map((cat) => [cat.id, cat.name])) as Record<number, string>;
+
+export enum DeepLinkAction {
+	SEARCH = 'search',
+	FAVORITES = 'favorites',
+	RULES = 'rules',
+	CONTRIBUTING = 'contributing',
+	EXAMPLES = 'examples',
+}
+
+export const HINTS: Record<string, { message: string; defaultQuery?: string }> = {
+	inline: {
+		message: 'Try searching for <b>{query}</b> inline:\n\nJust type <code>@botlistbot {query}</code> in any chat to find matching bots!',
+		defaultQuery: 'search terms',
+	},
+	rules: {
+		message: MESSAGES.RULES,
+	},
+	private: {
+		message: 'Please use this command in a private chat with @BotListBot.',
+	},
+	manybot: {
+		message: 'Bots created with @Manybot are generally not accepted on the @BotList because they tend to be very limited in functionality.',
+	},
+	userbot: {
+		message: 'This is a @BotList, not a user list. Only actual Telegram bots (with usernames ending in "bot") are accepted.',
+	},
+	devlist: {
+		message: 'Looking for bot developers? Check out the @BotDevelopers channel!',
+	},
+};
+
+// Easter egg data
+export const EASTER_EGG_ADJECTIVES = [
+	'Adorable', 'Amazing', 'Awesome', 'Beautiful', 'Brave', 'Brilliant', 'Charming', 'Clever',
+	'Cool', 'Dazzling', 'Elegant', 'Epic', 'Fabulous', 'Fantastic', 'Fierce', 'Funky',
+	'Gentle', 'Glorious', 'Graceful', 'Grand', 'Groovy', 'Happy', 'Heroic', 'Humble',
+	'Incredible', 'Jolly', 'Kind', 'Legendary', 'Lucky', 'Magical', 'Majestic', 'Mighty',
+	'Noble', 'Peaceful', 'Perfect', 'Playful', 'Powerful', 'Quick', 'Radiant', 'Royal',
+	'Shiny', 'Smart', 'Speedy', 'Stellar', 'Strong', 'Super', 'Swift', 'Turbo',
+	'Ultimate', 'Unique', 'Vibrant', 'Wild', 'Wise', 'Witty', 'Wonderful', 'Zen',
+];
+
+export const EASTER_EGG_NOUNS = [
+	'Alpaca', 'Badger', 'Cat', 'Dingo', 'Eagle', 'Falcon', 'Giraffe', 'Hamster',
+	'Iguana', 'Jaguar', 'Koala', 'Llama', 'Moose', 'Narwhal', 'Otter', 'Panda',
+	'Quail', 'Raccoon', 'Sloth', 'Tiger', 'Unicorn', 'Vulture', 'Walrus', 'Yak',
+	'Zebra', 'Phoenix', 'Dragon', 'Griffin', 'Kraken', 'Penguin', 'Dolphin', 'Shark',
+];
+
+export const EASTER_EGG_ENDINGS = ['Bot', 'Bot', 'Bot', '_bot', 'Helper', 'Buddy', 'Pal', 'Assistant'];

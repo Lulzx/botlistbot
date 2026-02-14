@@ -18,6 +18,8 @@ export interface Bot {
   spam: boolean;
   rating_count: number;
   rating_sum: number;
+  country_id?: number;
+  inlinequeries: number;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +73,43 @@ export interface BotSubmission {
   created_at: string;
   submitter_telegram_id?: number | null;
   submitter_username?: string | null;
+}
+
+export interface Keyword {
+  id: number;
+  name: string;
+  bot_id: number;
+  created_at: string;
+}
+
+export interface Suggestion {
+  id: number;
+  user_id: number;
+  bot_id: number;
+  action: string;
+  value?: string;
+  executed: number;
+  created_at: string;
+  // Joined fields
+  bot_username?: string;
+  bot_name?: string;
+  user_telegram_id?: number;
+  username?: string;
+}
+
+export interface Statistic {
+  id: number;
+  user_id?: number;
+  action: string;
+  entity?: string;
+  level: number;
+  created_at: string;
+}
+
+export interface Country {
+  id: number;
+  name: string;
+  emoji: string;
 }
 
 export type CategoriesResponse = Category[];

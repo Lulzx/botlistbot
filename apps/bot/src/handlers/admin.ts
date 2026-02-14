@@ -1,10 +1,24 @@
 import { Composer } from 'grammy/web';
 import { InlineKeyboard } from 'grammy';
-import { type ApiResponse, type Bot, type BotSubmission, type UserInfo, fetchFromApi, postToApi, putToApi } from '../api';
+import {
+	type ApiResponse,
+	type Bot,
+	type BotSubmission,
+	type Keyword,
+	type StatisticEntry,
+	type StatisticsSummary,
+	type Suggestion,
+	type UserInfo,
+	deleteFromApi,
+	fetchFromApi,
+	postToApi,
+	putToApi,
+} from '../api';
 import { isAdminId } from '../config';
 import { CATEGORIES, CATEGORY_NAMES, MESSAGES } from '../constants';
-import { createAdminKeyboard } from '../keyboards';
+import { createAdminKeyboard, createSuggestionReviewKeyboard } from '../keyboards';
 import type { MyContext } from '../types';
+import { trackActivity } from '../tracking';
 
 export const composer = new Composer<MyContext>();
 
@@ -230,6 +244,43 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 		return;
 	}
 
+	// Handle suggestion accept/reject
+	if (action.startsWith('suggest_accept:') || action.startsWith('suggest_reject:')) {
+		const isAccept = action.startsWith('suggest_accept:');
+		const suggestionId = Number.parseInt(action.split(':')[1], 10);
+
+		if (Number.isNaN(suggestionId)) {
+			await ctx.answerCallbackQuery({ text: 'Invalid suggestion', show_alert: true });
+			return;
+		}
+
+		try {
+			const endpoint = isAccept
+				? `/admin/suggestions/${suggestionId}/accept`
+				: `/admin/suggestions/${suggestionId}/reject`;
+
+			const result = await postToApi<ApiResponse>(
+				endpoint,
+				{ admin_telegram_id: adminId },
+				ctx.env.API_BASE_URL,
+				ctx.env.API,
+			);
+
+			if (result.error) {
+				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
+				return;
+			}
+
+			trackActivity(ctx, isAccept ? 'suggestion_accept' : 'suggestion_reject', `#${suggestionId}`, 30);
+			await ctx.answerCallbackQuery({ text: isAccept ? MESSAGES.ADMIN_SUGGESTION_ACCEPTED : MESSAGES.ADMIN_SUGGESTION_REJECTED });
+			await renderPendingSuggestions(ctx, adminId, true);
+		} catch (error) {
+			console.error(`Error handling suggestion ${action}:`, error);
+			await ctx.answerCallbackQuery({ text: 'Action failed', show_alert: true });
+		}
+		return;
+	}
+
 	const replyWithPanel = async (text: string) => {
 		await ctx.reply(text, {
 			parse_mode: 'HTML',
@@ -264,6 +315,46 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 			await renderPendingSubmissions(ctx, adminId, true);
 			await ctx.answerCallbackQuery();
 			return;
+		case 'suggestions':
+			await renderPendingSuggestions(ctx, adminId, true);
+			await ctx.answerCallbackQuery();
+			return;
+		case 'stats': {
+			try {
+				const summary = await fetchFromApi<StatisticsSummary>(
+					`/admin/statistics/summary?admin_id=${adminId}`,
+					ctx.env.API_BASE_URL,
+					ctx.env.API,
+				);
+
+				let message = '📊 <b>Statistics</b>\n\n';
+				message += `<b>Totals:</b>\n`;
+				message += `• Bots: ${summary.totals.bots}\n`;
+				message += `• Users: ${summary.totals.users}\n`;
+				message += `• Favorites: ${summary.totals.favorites}\n`;
+				message += `• Pending Suggestions: ${summary.totals.pending_suggestions}\n\n`;
+
+				if (summary.actions.length > 0) {
+					message += '<b>Recent Activity:</b>\n';
+					for (const { action: act, count } of summary.actions) {
+						message += `• ${act}: ${count}\n`;
+					}
+				} else {
+					message += MESSAGES.ADMIN_STATS_EMPTY;
+				}
+
+				try {
+					await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
+				} catch {
+					await ctx.reply(message, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
+				}
+			} catch (error) {
+				console.error('Error fetching stats:', error);
+				await ctx.reply("Sorry, I couldn't fetch statistics.");
+			}
+			await ctx.answerCallbackQuery();
+			return;
+		}
 		default:
 			await ctx.answerCallbackQuery({ text: 'Unknown admin action', show_alert: true });
 			return;
@@ -638,5 +729,258 @@ composer.command('userinfo', async (ctx) => {
 	} catch (error) {
 		console.error('Error in /userinfo command:', error);
 		await ctx.reply("Sorry, I couldn't fetch user info. Please try again later.");
+	}
+});
+
+// /addkeyword command
+composer.command('addkeyword', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+		return;
+	}
+
+	const input = ctx.match?.trim();
+	if (!input) {
+		await ctx.reply(MESSAGES.ADMIN_KEYWORD_USAGE);
+		return;
+	}
+
+	const parts = input.split(/\s+/);
+	if (parts.length < 2) {
+		await ctx.reply(MESSAGES.ADMIN_KEYWORD_USAGE);
+		return;
+	}
+
+	const rawUsername = parts[0];
+	const keyword = parts.slice(1).join(' ').toLowerCase();
+	const username = rawUsername.replace(/^@+/, '');
+
+	if (!username || !keyword) {
+		await ctx.reply(MESSAGES.ADMIN_KEYWORD_USAGE);
+		return;
+	}
+
+	try {
+		// First find the bot
+		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${username}`, ctx.env.API_BASE_URL, ctx.env.API);
+
+		if ('error' in bot) {
+			await ctx.reply('❌ Bot not found.');
+			return;
+		}
+
+		const result = await postToApi<Keyword | ApiResponse>(
+			`/bots/${bot.id}/keywords`,
+			{ name: keyword, admin_telegram_id: adminId },
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		if ('error' in result) {
+			await ctx.reply(`Error: ${result.error}`);
+			return;
+		}
+
+		trackActivity(ctx, 'add_keyword', `${username}: ${keyword}`, 30);
+		await ctx.reply(MESSAGES.ADMIN_KEYWORD_ADDED);
+	} catch (error) {
+		console.error('Error in /addkeyword command:', error);
+		await ctx.reply("Sorry, I couldn't add the keyword. Please try again later.");
+	}
+});
+
+// /removekeyword command
+composer.command('removekeyword', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+		return;
+	}
+
+	const input = ctx.match?.trim();
+	if (!input) {
+		await ctx.reply('⚠️ Usage: /removekeyword @botusername keyword');
+		return;
+	}
+
+	const parts = input.split(/\s+/);
+	if (parts.length < 2) {
+		await ctx.reply('⚠️ Usage: /removekeyword @botusername keyword');
+		return;
+	}
+
+	const rawUsername = parts[0];
+	const keyword = parts.slice(1).join(' ').toLowerCase();
+	const username = rawUsername.replace(/^@+/, '');
+
+	if (!username || !keyword) {
+		await ctx.reply('⚠️ Usage: /removekeyword @botusername keyword');
+		return;
+	}
+
+	try {
+		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${username}`, ctx.env.API_BASE_URL, ctx.env.API);
+
+		if ('error' in bot) {
+			await ctx.reply('❌ Bot not found.');
+			return;
+		}
+
+		const result = await deleteFromApi<ApiResponse>(
+			`/bots/${bot.id}/keywords/${encodeURIComponent(keyword)}`,
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		if (result.error) {
+			await ctx.reply(`Error: ${result.error}`);
+			return;
+		}
+
+		trackActivity(ctx, 'remove_keyword', `${username}: ${keyword}`, 30);
+		await ctx.reply(MESSAGES.ADMIN_KEYWORD_REMOVED);
+	} catch (error) {
+		console.error('Error in /removekeyword command:', error);
+		await ctx.reply("Sorry, I couldn't remove the keyword. Please try again later.");
+	}
+});
+
+// /suggestions command - Review pending suggestions
+const SUGGESTION_LIMIT = 5;
+
+const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferEdit = false) => {
+	try {
+		const suggestions = await fetchFromApi<Suggestion[]>(
+			`/admin/suggestions/pending?admin_id=${adminId}&limit=${SUGGESTION_LIMIT}`,
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		const hasPending = suggestions.length > 0;
+
+		if (!hasPending) {
+			const text = MESSAGES.ADMIN_SUGGESTIONS_EMPTY;
+			if (preferEdit) {
+				try {
+					await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
+				} catch {
+					await ctx.reply(text, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
+				}
+			} else {
+				await ctx.reply(text, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
+			}
+			return;
+		}
+
+		const listText = suggestions
+			.map((s, i) => {
+				const bot = s.bot_username ? `@${s.bot_username}` : `bot #${s.bot_id}`;
+				const user = s.username ? `@${s.username}` : `user #${s.user_id}`;
+				return `${i + 1}) <b>${s.action}</b> on ${bot}\n   By: ${user}\n   Value: ${s.value || '(none)'}`;
+			})
+			.join('\n\n');
+
+		const keyboard = new InlineKeyboard();
+		for (const suggestion of suggestions) {
+			keyboard.row(
+				{ text: `✅ #${suggestion.id}`, callback_data: `admin:suggest_accept:${suggestion.id}` },
+				{ text: `❌ #${suggestion.id}`, callback_data: `admin:suggest_reject:${suggestion.id}` },
+			);
+		}
+		keyboard.row(
+			{ text: '🔄 Refresh', callback_data: 'admin:suggestions' },
+			{ text: '⬅️ Back', callback_data: 'admin:panel' },
+		);
+
+		const fullText = `${MESSAGES.ADMIN_SUGGESTIONS_INTRO}\n\n${listText}\n\nShowing up to ${SUGGESTION_LIMIT} pending items.`;
+
+		if (preferEdit) {
+			try {
+				await ctx.editMessageText(fullText, { parse_mode: 'HTML', reply_markup: keyboard });
+			} catch {
+				await ctx.reply(fullText, { parse_mode: 'HTML', reply_markup: keyboard });
+			}
+		} else {
+			await ctx.reply(fullText, { parse_mode: 'HTML', reply_markup: keyboard });
+		}
+	} catch (error) {
+		console.error('Error fetching pending suggestions:', error);
+		if (preferEdit) {
+			await ctx.answerCallbackQuery({ text: 'Failed to load suggestions', show_alert: true });
+		} else {
+			await ctx.reply("Sorry, I couldn't load pending suggestions. Please try again later.");
+		}
+	}
+};
+
+composer.command('suggestions', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+		return;
+	}
+
+	await renderPendingSuggestions(ctx, adminId);
+});
+
+// /stats command - View activity statistics
+composer.command('stats', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	if (!(await isAdmin(ctx))) {
+		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+		return;
+	}
+
+	try {
+		const summary = await fetchFromApi<StatisticsSummary>(
+			`/admin/statistics/summary?admin_id=${adminId}`,
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		let message = '📊 <b>Statistics</b>\n\n';
+		message += `<b>Totals:</b>\n`;
+		message += `• Bots: ${summary.totals.bots}\n`;
+		message += `• Users: ${summary.totals.users}\n`;
+		message += `• Favorites: ${summary.totals.favorites}\n`;
+		message += `• Pending Suggestions: ${summary.totals.pending_suggestions}\n\n`;
+
+		if (summary.actions.length > 0) {
+			message += '<b>Recent Activity:</b>\n';
+			for (const { action, count } of summary.actions) {
+				message += `• ${action}: ${count}\n`;
+			}
+		} else {
+			message += MESSAGES.ADMIN_STATS_EMPTY;
+		}
+
+		await ctx.reply(message, {
+			parse_mode: 'HTML',
+			reply_markup: createAdminKeyboard(),
+		});
+	} catch (error) {
+		console.error('Error in /stats command:', error);
+		await ctx.reply("Sorry, I couldn't fetch statistics. Please try again later.");
 	}
 });

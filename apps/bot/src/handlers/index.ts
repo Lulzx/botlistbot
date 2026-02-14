@@ -11,9 +11,17 @@ composer.use(start);
 import commands from './commands';
 composer.use(commands);
 
-// Admin commands (ban, unban, userinfo)
+// Admin commands (ban, unban, userinfo, addkeyword, removekeyword, suggestions, stats)
 import admin from './admin';
 composer.use(admin);
+
+// Broadcast system (admin only)
+import broadcast from './broadcast';
+composer.use(broadcast);
+
+// Hints system (group chat hashtags)
+import hints from './hints';
+composer.use(hints);
 
 // Categories command (kept for backward compatibility)
 import categories from './categories';
