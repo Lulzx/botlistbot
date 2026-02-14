@@ -1,14 +1,9 @@
 import { Composer } from 'grammy/web';
 import { type Bot, fetchFromApi } from '../api';
 import { DeepLinkAction, MESSAGES } from '../constants';
-import {
-	createEmptyFavoritesKeyboard,
-	createFavoritesKeyboard,
-	createInlineSearchKeyboard,
-	createMainKeyboard,
-} from '../keyboards';
-import type { MyContext } from '../types';
+import { createEmptyFavoritesKeyboard, createFavoritesKeyboard, createInlineSearchKeyboard, createMainKeyboard } from '../keyboards';
 import { trackActivity } from '../tracking';
+import type { MyContext } from '../types';
 
 export const composer = new Composer<MyContext>();
 

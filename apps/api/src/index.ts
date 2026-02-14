@@ -306,7 +306,7 @@ async function getAdminUser(db: D1Database, adminTelegramId: number): Promise<Us
     "SELECT * FROM users WHERE telegram_id = ?"
   ).bind(adminTelegramId).first<User>();
 
-  if (!admin || admin.is_admin !== 1) {
+  if (!admin || !admin.is_admin) {
     return null;
   }
 
@@ -1633,7 +1633,7 @@ app.post("/admin/ban", async (c) => {
       "SELECT is_admin FROM users WHERE telegram_id = ?"
     ).bind(body.admin_telegram_id).first<{ is_admin: number }>();
 
-    if (!admin || admin.is_admin !== 1) {
+    if (!admin || !admin.is_admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
@@ -1673,7 +1673,7 @@ app.post("/admin/unban", async (c) => {
       "SELECT is_admin FROM users WHERE telegram_id = ?"
     ).bind(body.admin_telegram_id).first<{ is_admin: number }>();
 
-    if (!admin || admin.is_admin !== 1) {
+    if (!admin || !admin.is_admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
@@ -1703,7 +1703,7 @@ app.get("/admin/userinfo/:userId", async (c) => {
       "SELECT is_admin FROM users WHERE telegram_id = ?"
     ).bind(adminId).first<{ is_admin: number }>();
 
-    if (!admin || admin.is_admin !== 1) {
+    if (!admin || !admin.is_admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 

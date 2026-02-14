@@ -1,5 +1,5 @@
-import { Composer } from 'grammy/web';
 import { InlineKeyboard } from 'grammy';
+import { Composer } from 'grammy/web';
 import {
 	type ApiResponse,
 	type Bot,
@@ -17,8 +17,8 @@ import {
 import { isAdminId } from '../config';
 import { CATEGORIES, CATEGORY_NAMES, MESSAGES } from '../constants';
 import { createAdminKeyboard, createSuggestionReviewKeyboard } from '../keyboards';
-import type { MyContext } from '../types';
 import { trackActivity } from '../tracking';
+import type { MyContext } from '../types';
 
 export const composer = new Composer<MyContext>();
 
@@ -154,7 +154,7 @@ const handleSubmissionDecision = async (
 				ctx.env.API,
 			);
 
-			if ('error' in result) {
+			if ('error' in result && result.error) {
 				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
 				if (result.error.toLowerCase().includes('processed') || result.error.toLowerCase().includes('not found')) {
 					await renderPendingSubmissions(ctx, adminId, true);
@@ -181,8 +181,9 @@ const handleSubmissionDecision = async (
 			);
 
 			if (result.error) {
-				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
-				if (result.error.toLowerCase().includes('processed') || result.error.toLowerCase().includes('not found')) {
+				const errorMsg = result.error;
+				await ctx.answerCallbackQuery({ text: errorMsg, show_alert: true });
+				if (errorMsg.toLowerCase().includes('processed') || errorMsg.toLowerCase().includes('not found')) {
 					await renderPendingSubmissions(ctx, adminId, true);
 				}
 				return;
@@ -255,16 +256,9 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 		}
 
 		try {
-			const endpoint = isAccept
-				? `/admin/suggestions/${suggestionId}/accept`
-				: `/admin/suggestions/${suggestionId}/reject`;
+			const endpoint = isAccept ? `/admin/suggestions/${suggestionId}/accept` : `/admin/suggestions/${suggestionId}/reject`;
 
-			const result = await postToApi<ApiResponse>(
-				endpoint,
-				{ admin_telegram_id: adminId },
-				ctx.env.API_BASE_URL,
-				ctx.env.API,
-			);
+			const result = await postToApi<ApiResponse>(endpoint, { admin_telegram_id: adminId }, ctx.env.API_BASE_URL, ctx.env.API);
 
 			if (result.error) {
 				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
@@ -328,7 +322,7 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 				);
 
 				let message = '📊 <b>Statistics</b>\n\n';
-				message += `<b>Totals:</b>\n`;
+				message += '<b>Totals:</b>\n';
 				message += `• Bots: ${summary.totals.bots}\n`;
 				message += `• Users: ${summary.totals.users}\n`;
 				message += `• Favorites: ${summary.totals.favorites}\n`;
@@ -382,7 +376,10 @@ composer.command('addbot', async (ctx) => {
 		return;
 	}
 
-	const parts = input.split('|').map((part) => part.trim()).filter(Boolean);
+	const parts = input
+		.split('|')
+		.map((part) => part.trim())
+		.filter(Boolean);
 
 	if (parts.length < 4) {
 		await ctx.reply(MESSAGES.ADMIN_ADD_USAGE);
@@ -417,19 +414,21 @@ composer.command('addbot', async (ctx) => {
 			ctx.env.API,
 		);
 
-		if ('error' in result) {
-			if (result.error.includes('already in the BotList') || result.error.includes('already exists')) {
+		if ('error' in result && result.error) {
+			const errorMsg = result.error;
+			if (errorMsg.includes('already in the BotList') || errorMsg.includes('already exists')) {
 				await ctx.reply(MESSAGES.ADMIN_ADD_EXISTS);
-			} else if (result.error.toLowerCase().includes('category')) {
+			} else if (errorMsg.toLowerCase().includes('category')) {
 				await ctx.reply(MESSAGES.ADMIN_CATEGORY_INVALID);
 			} else {
-				await ctx.reply(`Error: ${result.error}`);
+				await ctx.reply(`Error: ${errorMsg}`);
 			}
 			return;
 		}
 
+		const bot = result as Bot;
 		await ctx.reply(
-			`${MESSAGES.ADMIN_ADD_SUCCESS}\n<b>${result.name}</b> (@${result.username})\nCategory: ${CATEGORY_NAMES[result.category_id] || 'Uncategorized'}`,
+			`${MESSAGES.ADMIN_ADD_SUCCESS}\n<b>${bot.name}</b> (@${bot.username})\nCategory: ${CATEGORY_NAMES[bot.category_id] || 'Uncategorized'}`,
 			{ parse_mode: 'HTML' },
 		);
 	} catch (error) {
@@ -498,26 +497,23 @@ composer.command('updatebot', async (ctx) => {
 	}
 
 	try {
-		const result = await putToApi<Bot | ApiResponse>(
-			`/admin/bots/username/${username}`,
-			payload,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await putToApi<Bot | ApiResponse>(`/admin/bots/username/${username}`, payload, ctx.env.API_BASE_URL, ctx.env.API);
 
-		if ('error' in result) {
-			if (result.error.toLowerCase().includes('not found')) {
+		if ('error' in result && result.error) {
+			const errorMsg = result.error;
+			if (errorMsg.toLowerCase().includes('not found')) {
 				await ctx.reply('❌ Bot not found.');
-			} else if (result.error.toLowerCase().includes('category')) {
+			} else if (errorMsg.toLowerCase().includes('category')) {
 				await ctx.reply(MESSAGES.ADMIN_CATEGORY_INVALID);
 			} else {
-				await ctx.reply(`Error: ${result.error}`);
+				await ctx.reply(`Error: ${errorMsg}`);
 			}
 			return;
 		}
 
+		const bot = result as Bot;
 		await ctx.reply(
-			`${MESSAGES.ADMIN_UPDATE_SUCCESS}\n<b>${result.name}</b> (@${result.username})\nCategory: ${CATEGORY_NAMES[result.category_id] || 'Uncategorized'}`,
+			`${MESSAGES.ADMIN_UPDATE_SUCCESS}\n<b>${bot.name}</b> (@${bot.username})\nCategory: ${CATEGORY_NAMES[bot.category_id] || 'Uncategorized'}`,
 			{ parse_mode: 'HTML' },
 		);
 	} catch (error) {
@@ -898,10 +894,7 @@ const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferE
 				{ text: `❌ #${suggestion.id}`, callback_data: `admin:suggest_reject:${suggestion.id}` },
 			);
 		}
-		keyboard.row(
-			{ text: '🔄 Refresh', callback_data: 'admin:suggestions' },
-			{ text: '⬅️ Back', callback_data: 'admin:panel' },
-		);
+		keyboard.row({ text: '🔄 Refresh', callback_data: 'admin:suggestions' }, { text: '⬅️ Back', callback_data: 'admin:panel' });
 
 		const fullText = `${MESSAGES.ADMIN_SUGGESTIONS_INTRO}\n\n${listText}\n\nShowing up to ${SUGGESTION_LIMIT} pending items.`;
 
@@ -960,7 +953,7 @@ composer.command('stats', async (ctx) => {
 		);
 
 		let message = '📊 <b>Statistics</b>\n\n';
-		message += `<b>Totals:</b>\n`;
+		message += '<b>Totals:</b>\n';
 		message += `• Bots: ${summary.totals.bots}\n`;
 		message += `• Users: ${summary.totals.users}\n`;
 		message += `• Favorites: ${summary.totals.favorites}\n`;

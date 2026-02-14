@@ -15,7 +15,9 @@ const mockKeyboards = {
 	createFavoritesKeyboard: vi.fn(() => ({ keyboard: 'favorites' })),
 	createBotListKeyboard: vi.fn(() => ({ keyboard: 'botlist' })),
 	createSearchResultsKeyboard: vi.fn(() => ({ keyboard: 'search' })),
+	createInlineSearchKeyboard: vi.fn(() => ({ keyboard: 'inline_search' })),
 	createCancelKeyboard: vi.fn(() => ({ keyboard: 'cancel' })),
+	createSuggestionActionsKeyboard: vi.fn(() => ({ keyboard: 'suggestion_actions' })),
 };
 
 vi.mock('grammy/web', () => ({
@@ -37,6 +39,10 @@ vi.mock('../src/api', () => ({
 }));
 
 vi.mock('../src/keyboards', () => mockKeyboards);
+
+vi.mock('../src/tracking', () => ({
+	trackActivity: vi.fn(),
+}));
 
 const getHandler = (name: string) => {
 	const handler = commandHandlers[name];
@@ -181,7 +187,7 @@ describe('command handlers', () => {
 
 		expect(mockFetchFromApi).not.toHaveBeenCalled();
 		expect(replies[0]?.text).toBe(MESSAGES.SEARCH_PROMPT);
-		expect(replies[0]?.options).toMatchObject({ reply_markup: { keyboard: 'cancel' } });
+		expect(replies[0]?.options).toMatchObject({ reply_markup: { keyboard: 'inline_search' } });
 	});
 
 	it('subscribes user to updates', async () => {

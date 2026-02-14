@@ -3,8 +3,8 @@ import { fetchFromApi } from '../api';
 import { isAdminId } from '../config';
 import { MESSAGES } from '../constants';
 import { createConfirmKeyboard } from '../keyboards';
-import type { MyContext } from '../types';
 import { trackActivity } from '../tracking';
+import type { MyContext } from '../types';
 
 export const composer = new Composer<MyContext>();
 

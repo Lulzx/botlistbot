@@ -1,5 +1,5 @@
-import { Composer } from 'grammy/web';
 import { InlineKeyboard } from 'grammy';
+import { Composer } from 'grammy/web';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
 import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from '../constants';
 import {
@@ -13,8 +13,8 @@ import {
 	createSearchResultsKeyboard,
 	createSuggestionActionsKeyboard,
 } from '../keyboards';
-import type { MyContext } from '../types';
 import { trackActivity } from '../tracking';
+import type { MyContext } from '../types';
 
 export const composer = new Composer<MyContext>();
 
@@ -200,7 +200,9 @@ composer.command('search', async (ctx) => {
 
 		const botList = bots.slice(0, 10).map((bot, index) => {
 			const category = CATEGORY_NAMES[bot.category_id] || 'Uncategorized';
-			const description = bot.description ? `${bot.description.slice(0, 80)}${bot.description.length > 80 ? '...' : ''}` : 'No description';
+			const description = bot.description
+				? `${bot.description.slice(0, 80)}${bot.description.length > 80 ? '...' : ''}`
+				: 'No description';
 			return `${index + 1}. <b>${bot.name}</b> (@${bot.username})\n   ${category} • ${description}`;
 		});
 		const moreText = bots.length > 10 ? `\n\n<i>...and ${bots.length - 10} more results</i>` : '';
@@ -609,7 +611,7 @@ composer.command('easteregg', async (ctx) => {
 	}
 	keyboard.row({ text: '🎲 Generate More', callback_data: 'easteregg_more' });
 
-	await ctx.reply('🥚 <b>Your random bot name ideas:</b>\n\n' + names.join('\n'), {
+	await ctx.reply(`🥚 <b>Your random bot name ideas:</b>\n\n${names.join('\n')}`, {
 		parse_mode: 'HTML',
 		reply_markup: keyboard,
 	});

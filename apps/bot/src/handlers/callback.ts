@@ -1,5 +1,5 @@
-import { Composer } from 'grammy/web';
 import { GrammyError, InlineKeyboard } from 'grammy';
+import { Composer } from 'grammy/web';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
 import type { MyContext } from '../types';
 import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from './../constants';
@@ -209,9 +209,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			const remaining = bots.slice(10, 30);
-			const botList = remaining
-				.map((bot, index) => `${index + 11}. <b>@${bot.username}</b> - ${bot.name}`)
-				.join('\n');
+			const botList = remaining.map((bot, index) => `${index + 11}. <b>@${bot.username}</b> - ${bot.name}`).join('\n');
 
 			const leftoverCount = bots.length - 10 - remaining.length;
 			const extraNote = leftoverCount > 0 ? `\n\n...and ${leftoverCount} more. Refine your query to narrow results.` : '';
@@ -277,15 +275,11 @@ composer.on('callback_query:data', async (ctx) => {
 				await ctx.answerCallbackQuery();
 
 				// Store the pending suggestion context in the message text so the user knows what to reply with
-				const actionLabel = action === 'add_keyword' ? 'keyword to add' :
-					action === 'remove_keyword' ? 'keyword to remove' :
-					action;
+				const actionLabel =
+					action === 'add_keyword' ? 'keyword to add' : action === 'remove_keyword' ? 'keyword to remove' : action;
 
 				await ctx.editMessageText(
-					MESSAGES.SUGGEST_ENTER_VALUE
-						.replace('{action}', actionLabel)
-						.replace('{username}', botUsername) +
-					`\n\n<i>Reply to this message with the new value.</i>`,
+					`${MESSAGES.SUGGEST_ENTER_VALUE.replace('{action}', actionLabel).replace('{username}', botUsername)}\n\n<i>Reply to this message with the new value.</i>`,
 					{ parse_mode: 'HTML' },
 				);
 			}
@@ -310,7 +304,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 			keyboard.row({ text: '🎲 Generate More', callback_data: 'easteregg_more' });
 
-			await safeEditMessageText(ctx, '🥚 <b>Your random bot name ideas:</b>\n\n' + names.join('\n'), {
+			await safeEditMessageText(ctx, `🥚 <b>Your random bot name ideas:</b>\n\n${names.join('\n')}`, {
 				parse_mode: 'HTML',
 				reply_markup: keyboard,
 			});

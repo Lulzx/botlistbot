@@ -75,9 +75,9 @@ describe('keyboards', () => {
 			const buttonTexts = allButtons.map((b) => getText(b));
 
 			expect(buttonTexts).toContain('❓ Help');
-			expect(buttonTexts).toContain('🔍 Contributing');
+			expect(buttonTexts).toContain('📣 Contributing');
 			expect(buttonTexts).toContain('📝 Examples');
-			expect(buttonTexts).toContain('Try me inline!');
+			expect(buttonTexts).toContain('🔍 Search inline');
 		});
 
 		it('should have correct callback data', () => {
@@ -88,7 +88,7 @@ describe('keyboards', () => {
 			expect(callbackData).toContain('help');
 			expect(callbackData).toContain('contributing');
 			expect(callbackData).toContain('examples');
-			expect(callbackData).toContain('try_inline');
+			expect(callbackData).toContain('show_categories');
 		});
 	});
 

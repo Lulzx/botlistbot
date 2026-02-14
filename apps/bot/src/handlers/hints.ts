@@ -10,8 +10,8 @@ composer.hears(/#(inline|rules|private|manybot|userbot|devlist)\b(.*)/, async (c
 	// Only respond in group chats
 	if (ctx.chat?.type === 'private') return;
 
-	const hintKey = ctx.match![1];
-	const queryText = ctx.match![2]?.trim();
+	const hintKey = ctx.match?.[1];
+	const queryText = ctx.match?.[2]?.trim();
 
 	const hint = HINTS[hintKey];
 	if (!hint) return;

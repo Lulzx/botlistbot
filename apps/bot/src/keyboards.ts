@@ -9,10 +9,7 @@ export const createMainKeyboard = () => {
 			{ text: '🔍 Search inline', switch_inline_query_current_chat: '' },
 			{ text: '📂 Categories', callback_data: 'show_categories' },
 		)
-		.row(
-			{ text: '🎲 Explore', callback_data: 'explore_more' },
-			{ text: '⭐ Favorites', callback_data: 'fav_refresh' },
-		)
+		.row({ text: '🎲 Explore', callback_data: 'explore_more' }, { text: '⭐ Favorites', callback_data: 'fav_refresh' })
 		.row(
 			{ text: '❓ Help', callback_data: 'help' },
 			{ text: '📣 Contributing', callback_data: 'contributing' },

@@ -14,20 +14,16 @@ const buildBotResult = (bot: Bot, query: string, offset: number) => {
 	const category = CATEGORY_NAMES[bot.category_id] || 'Uncategorized';
 	const rating = bot.avg_rating ? `${bot.avg_rating.toFixed(1)}⭐ (${bot.rating_count ?? 0})` : undefined;
 
-	return InlineQueryResultBuilder.article(
-		`BOT-${bot.id}-${offset}`,
-		`${bot.name} • @${bot.username}`,
-		{
-			description: `${category} • ${formatDescription(bot.description, 70)}`,
-			url: `https://t.me/${bot.username}`,
-			reply_markup: {
-				inline_keyboard: [
-					[{ text: `Open @${bot.username}`, url: `https://t.me/${bot.username}` }],
-					[{ text: 'Search in this chat', switch_inline_query_current_chat: query }],
-				],
-			},
+	return InlineQueryResultBuilder.article(`BOT-${bot.id}-${offset}`, `${bot.name} • @${bot.username}`, {
+		description: `${category} • ${formatDescription(bot.description, 70)}`,
+		url: `https://t.me/${bot.username}`,
+		reply_markup: {
+			inline_keyboard: [
+				[{ text: `Open @${bot.username}`, url: `https://t.me/${bot.username}` }],
+				[{ text: 'Search in this chat', switch_inline_query_current_chat: query }],
+			],
 		},
-	).text(
+	}).text(
 		`🤖 <b>${bot.name}</b> (@${bot.username})\n${bot.description || 'No description available.'}\n\n🏷 ${category}${rating ? `\n⭐️ ${rating}` : ''}\n🔗 https://t.me/${bot.username}`,
 		{
 			parse_mode: 'HTML',
@@ -39,13 +35,9 @@ const buildBotResult = (bot: Bot, query: string, offset: number) => {
 };
 
 const buildKeepTypingResult = (query: string, offset: number) => {
-	return InlineQueryResultBuilder.article(
-		`KEEP_TYPING-${offset}`,
-		'Keep typing to search bots',
-		{
-			description: 'Enter at least 3 characters (e.g. "music", "@weatherbot")',
-		},
-	).text(
+	return InlineQueryResultBuilder.article(`KEEP_TYPING-${offset}`, 'Keep typing to search bots', {
+		description: 'Enter at least 3 characters (e.g. "music", "@weatherbot")',
+	}).text(
 		`You typed "<b>${query}</b>". Type at least 3 characters to search the BotList.\n\nExamples:\n• music\n• weather\n• @username`,
 		{
 			parse_mode: 'HTML',
@@ -54,29 +46,25 @@ const buildKeepTypingResult = (query: string, offset: number) => {
 };
 
 const buildCategoryResult = (category: Category, offset: number) => {
-	return InlineQueryResultBuilder.article(
-		`CAT-${category.id}-${offset}`,
-		category.name,
-		{
-			description: `Browse bots in ${category.name}`,
-			reply_markup: {
-				inline_keyboard: [
-					[
-						{
-							text: '🔍 View bots',
-							callback_data: `category:${category.id}`,
-						},
-					],
-					[
-						{
-							text: 'Search this category inline',
-							switch_inline_query_current_chat: category.name,
-						},
-					],
+	return InlineQueryResultBuilder.article(`CAT-${category.id}-${offset}`, category.name, {
+		description: `Browse bots in ${category.name}`,
+		reply_markup: {
+			inline_keyboard: [
+				[
+					{
+						text: '🔍 View bots',
+						callback_data: `category:${category.id}`,
+					},
 				],
-			},
+				[
+					{
+						text: 'Search this category inline',
+						switch_inline_query_current_chat: category.name,
+					},
+				],
+			],
 		},
-	).text(`🤖 Loading bots in ${category.name}...\n\nTap below to browse this category.`, {
+	}).text(`🤖 Loading bots in ${category.name}...\n\nTap below to browse this category.`, {
 		parse_mode: 'HTML',
 		link_preview_options: {
 			is_disabled: true,
@@ -85,16 +73,11 @@ const buildCategoryResult = (category: Category, offset: number) => {
 };
 
 const buildStartResult = (offset: number) => {
-	return InlineQueryResultBuilder.article(
-		`START-${offset}`,
-		'Search BotList',
-		{
-			description: 'Type any bot name, @username, or keyword to get inline results.',
-		},
-	).text(
-		`Type a bot name, @username, or keyword to search the BotList inline.\n\nExample queries:\n• music\n• games\n• @weatherbot`,
-		{ parse_mode: 'HTML' },
-	);
+	return InlineQueryResultBuilder.article(`START-${offset}`, 'Search BotList', {
+		description: 'Type any bot name, @username, or keyword to get inline results.',
+	}).text('Type a bot name, @username, or keyword to search the BotList inline.\n\nExample queries:\n• music\n• games\n• @weatherbot', {
+		parse_mode: 'HTML',
+	});
 };
 
 export const composer = new Composer<MyContext>();
@@ -110,7 +93,10 @@ composer.on('inline_query', async (ctx) => {
 
 		if (query === '') {
 			const categories = await fetchFromApi<Category[]>('/categories', ctx.env.API_BASE_URL, ctx.env.API);
-			const results = [buildStartResult(start), ...categories.slice(start, start + INLINE_PAGE_SIZE).map((category, index) => buildCategoryResult(category, start + index))];
+			const results = [
+				buildStartResult(start),
+				...categories.slice(start, start + INLINE_PAGE_SIZE).map((category, index) => buildCategoryResult(category, start + index)),
+			];
 			const nextOffset = start + INLINE_PAGE_SIZE < categories.length ? String(start + INLINE_PAGE_SIZE) : '';
 
 			return await ctx.answerInlineQuery(results, {
