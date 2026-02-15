@@ -85,6 +85,23 @@ export interface StatisticsSummary {
 	};
 }
 
+export interface Statistic {
+	id: number;
+	user_id?: number;
+	action: string;
+	entity?: string;
+	level: number;
+	created_at: string;
+	user_telegram_id?: number;
+	username?: string;
+}
+
+export interface Country {
+	id: number;
+	name: string;
+	emoji: string;
+}
+
 export interface ApiResponse {
 	success?: boolean;
 	message?: string;

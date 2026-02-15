@@ -1,4 +1,4 @@
-import type { StatisticsSummary } from './types';
+import type { Statistic, StatisticsSummary } from './types';
 import { getAdminUser } from './users';
 
 export async function logActivity(
@@ -18,6 +18,32 @@ export async function logActivity(
 		.prepare("INSERT INTO statistics (user_id, action, entity, level, created_at) VALUES (?, ?, ?, ?, datetime('now'))")
 		.bind(userId, opts.action, opts.entity || null, opts.level ?? 20)
 		.run();
+}
+
+export async function getStatistics(
+	db: D1Database,
+	adminTelegramId: number,
+	limit = 20,
+	minLevel = 0,
+): Promise<Statistic[]> {
+	const admin = await getAdminUser(db, adminTelegramId);
+	if (!admin) return [];
+
+	const safeLimit = Math.min(Math.max(Number.isNaN(limit) ? 20 : limit, 1), 100);
+
+	const { results } = await db
+		.prepare(
+			`SELECT s.*, u.telegram_id as user_telegram_id, u.username
+      FROM statistics s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.level >= ?
+      ORDER BY s.created_at DESC
+      LIMIT ?`,
+		)
+		.bind(minLevel, safeLimit)
+		.all<Statistic>();
+
+	return results;
 }
 
 export async function getStatisticsSummary(db: D1Database, adminTelegramId: number): Promise<StatisticsSummary | null> {

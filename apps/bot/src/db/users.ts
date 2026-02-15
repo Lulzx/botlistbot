@@ -34,6 +34,18 @@ export async function isUserAdmin(db: D1Database, telegramId: number): Promise<b
 	return user?.is_admin === 1;
 }
 
+export async function isUserBanned(db: D1Database, telegramId: number, adminTelegramId: number): Promise<boolean | null> {
+	const admin = await getAdminUser(db, adminTelegramId);
+	if (!admin) return null;
+
+	const user = await db
+		.prepare('SELECT banned FROM users WHERE telegram_id = ?')
+		.bind(telegramId)
+		.first<{ banned: number }>();
+
+	return user?.banned === 1;
+}
+
 export async function getAdminUser(db: D1Database, adminTelegramId: number): Promise<User | null> {
 	if (!adminTelegramId) return null;
 	const admin = await db.prepare('SELECT * FROM users WHERE telegram_id = ?').bind(adminTelegramId).first<User>();

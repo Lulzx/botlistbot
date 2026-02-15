@@ -61,6 +61,28 @@ export async function getPendingSuggestions(
 	return results;
 }
 
+export async function getSuggestionsByBotId(
+	db: D1Database,
+	botId: number,
+	adminTelegramId: number,
+): Promise<Suggestion[]> {
+	const admin = await getAdminUser(db, adminTelegramId);
+	if (!admin) return [];
+
+	const { results } = await db
+		.prepare(
+			`SELECT s.*, u.telegram_id as user_telegram_id, u.username
+      FROM suggestions s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.bot_id = ? AND s.executed = 0
+      ORDER BY s.created_at ASC`,
+		)
+		.bind(botId)
+		.all<Suggestion>();
+
+	return results;
+}
+
 export async function acceptSuggestion(db: D1Database, suggestionId: number, adminTelegramId: number): Promise<ApiResponse> {
 	const admin = await getAdminUser(db, adminTelegramId);
 	if (!admin) return { error: 'Unauthorized' };

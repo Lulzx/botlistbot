@@ -30,6 +30,14 @@ export async function unsubscribe(db: D1Database, chatId: number): Promise<ApiRe
 	return { success: true, message: 'Unsubscribed from updates' };
 }
 
+export async function isSubscribed(db: D1Database, chatId: number): Promise<boolean> {
+	const sub = await db
+		.prepare('SELECT id FROM subscriptions WHERE chat_id = ? AND active = 1')
+		.bind(chatId)
+		.first<{ id: number }>();
+	return !!sub;
+}
+
 export async function getAllActiveSubscribers(
 	db: D1Database,
 	adminTelegramId: number,

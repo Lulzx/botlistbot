@@ -7,6 +7,7 @@ export * from './subscriptions';
 export * from './submissions';
 export * from './reports';
 export * from './suggestions';
+export * from './countries';
 export * from './statistics';
 export * from './keywords';
 export * from './ratings';
