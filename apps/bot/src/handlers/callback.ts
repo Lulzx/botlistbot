@@ -1,6 +1,16 @@
 import { GrammyError, InlineKeyboard } from 'grammy';
 import { Composer } from 'grammy/web';
-import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
+import {
+	type Bot,
+	type UserSubmissions,
+	getUserFavorites,
+	removeFavorite,
+	getRandomBots,
+	searchBots,
+	getBotsByCategory,
+	getUserSubmissions,
+	createSuggestion,
+} from '../db';
 import type { MyContext } from '../types';
 import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from './../constants';
 import {
@@ -52,7 +62,7 @@ composer.on('callback_query:data', async (ctx) => {
 
 				const categoryName = CATEGORY_NAMES[categoryId];
 
-				const bots = await fetchFromApi<Bot[]>(`/bots/category/${categoryId}`, ctx.env.API_BASE_URL, ctx.env.API);
+				const bots = await getBotsByCategory(ctx.env.DB, categoryId);
 
 				if (bots.length === 0) {
 					await ctx.reply(`🤷 No bots found in ${categoryName}.`);
@@ -87,7 +97,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			try {
-				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+				const favorites = await getUserFavorites(ctx.env.DB, userId);
 
 				if (favorites.length === 0) {
 					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
@@ -118,7 +128,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			try {
-				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+				const favorites = await getUserFavorites(ctx.env.DB, userId);
 
 				if (favorites.length === 0) {
 					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
@@ -156,7 +166,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			try {
-				const result = await deleteFromApi<ApiResponse>(`/users/${userId}/favorites/${botUsername}`, ctx.env.API_BASE_URL, ctx.env.API);
+				const result = await removeFavorite(ctx.env.DB, userId, botUsername);
 
 				if (result.error) {
 					await ctx.answerCallbackQuery({ text: result.error });
@@ -164,7 +174,7 @@ composer.on('callback_query:data', async (ctx) => {
 				}
 
 				// Refresh the favorites list
-				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+				const favorites = await getUserFavorites(ctx.env.DB, userId);
 
 				if (favorites.length === 0) {
 					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
@@ -190,7 +200,7 @@ composer.on('callback_query:data', async (ctx) => {
 		// Handle explore callbacks
 		if (data === 'explore_more') {
 			try {
-				const bots = await fetchFromApi<Bot[]>('/bots/random?limit=5', ctx.env.API_BASE_URL, ctx.env.API);
+				const bots = await getRandomBots(ctx.env.DB, 5);
 
 				if (bots.length === 0) {
 					await ctx.answerCallbackQuery({ text: 'No bots available' });
@@ -230,17 +240,18 @@ composer.on('callback_query:data', async (ctx) => {
 				return;
 			}
 
-			const searchParams = new URLSearchParams();
 			const sanitizedQuery = query.replace(/^@+/, '');
 
+			const searchOpts: { name?: string; username?: string; description?: string } = {
+				name: sanitizedQuery,
+				description: sanitizedQuery,
+			};
+
 			if (query.startsWith('@')) {
-				searchParams.append('username', sanitizedQuery);
+				searchOpts.username = sanitizedQuery;
 			}
 
-			searchParams.append('name', sanitizedQuery);
-			searchParams.append('description', sanitizedQuery);
-
-			const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
+			const bots = await searchBots(ctx.env.DB, searchOpts);
 
 			if (bots.length <= 10) {
 				await ctx.answerCallbackQuery({ text: 'No more results' });
@@ -284,17 +295,7 @@ composer.on('callback_query:data', async (ctx) => {
 				const directActions = ['offline', 'spam', 'inlinequeries'];
 				if (directActions.includes(action)) {
 					try {
-						const result = await postToApi<ApiResponse>(
-							'/suggestions',
-							{
-								telegram_id: userId,
-								bot_username: botUsername,
-								action,
-								value: 'true',
-							},
-							ctx.env.API_BASE_URL,
-							ctx.env.API,
-						);
+						const result = await createSuggestion(ctx.env.DB, userId, botUsername, action, 'true');
 
 						if (result.error) {
 							await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
@@ -313,7 +314,6 @@ composer.on('callback_query:data', async (ctx) => {
 				// For value-based actions, prompt for text input
 				await ctx.answerCallbackQuery();
 
-				// Store the pending suggestion context in the message text so the user knows what to reply with
 				const actionLabel =
 					action === 'add_keyword' ? 'keyword to add' : action === 'remove_keyword' ? 'keyword to remove' : action;
 
@@ -358,7 +358,7 @@ composer.on('callback_query:data', async (ctx) => {
 			}
 
 			try {
-				const submissions = await fetchFromApi<UserSubmissions>(`/users/${userId}/submissions`, ctx.env.API_BASE_URL, ctx.env.API);
+				const submissions = await getUserSubmissions(ctx.env.DB, userId);
 				const { approved, pending } = submissions;
 
 				let message = '📊 <b>Your Bot Statistics</b>\n\n';

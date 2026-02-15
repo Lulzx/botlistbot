@@ -1,6 +1,26 @@
 import { InlineKeyboard } from 'grammy';
 import { Composer } from 'grammy/web';
-import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
+import {
+	type ApiResponse,
+	type Bot,
+	type UserSubmissions,
+	addFavorite,
+	getBestBots,
+	getNewBots,
+	getRandomBots,
+	getUserFavorites,
+	getUserSubmissions,
+	removeFavorite,
+	searchBots,
+	getBotByUsername,
+	subscribe,
+	unsubscribe,
+	submitBot,
+	reportSpam,
+	reportOffline,
+	createSuggestion,
+	rateBot,
+} from '../db';
 import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from '../constants';
 import {
 	createBotListKeyboard,
@@ -45,7 +65,7 @@ composer.command(['category', 'categories'], async (ctx) => {
 // /explore command
 composer.command('explore', async (ctx) => {
 	try {
-		const bots = await fetchFromApi<Bot[]>('/bots/random?limit=5', ctx.env.API_BASE_URL, ctx.env.API);
+		const bots = await getRandomBots(ctx.env.DB, 5);
 
 		if (bots.length === 0) {
 			await ctx.reply(MESSAGES.EXPLORE_EMPTY);
@@ -80,7 +100,7 @@ composer.command('favorites', async (ctx) => {
 	}
 
 	try {
-		const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+		const favorites = await getUserFavorites(ctx.env.DB, userId);
 
 		if (favorites.length === 0) {
 			await ctx.reply(MESSAGES.FAVORITES_EMPTY, {
@@ -129,14 +149,7 @@ composer.command(['favorite', 'fav'], async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			`/users/${userId}/favorites`,
-			{
-				bot_username: botUsername,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await addFavorite(ctx.env.DB, userId, botUsername);
 
 		if (result.error) {
 			if (result.error.includes('already in favorites')) {
@@ -177,17 +190,18 @@ composer.command('search', async (ctx) => {
 	}
 
 	try {
-		const searchParams = new URLSearchParams();
 		const sanitizedQuery = query.replace(/^@+/, '');
 
+		const searchOpts: { name?: string; username?: string; description?: string } = {
+			name: sanitizedQuery,
+			description: sanitizedQuery,
+		};
+
 		if (query.startsWith('@')) {
-			searchParams.append('username', sanitizedQuery);
+			searchOpts.username = sanitizedQuery;
 		}
 
-		searchParams.append('name', sanitizedQuery);
-		searchParams.append('description', sanitizedQuery);
-
-		const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const bots = await searchBots(ctx.env.DB, searchOpts);
 
 		trackActivity(ctx, 'search', query);
 
@@ -251,19 +265,14 @@ composer.command('new', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/submissions',
-			{
-				username,
-				name: username,
-				description: descriptionPart.replace(/🔎/g, '').trim() || '',
-				category_id: 1, // Default category
-				telegram_id: userId,
-				inlinequeries: hasInlineQueries ? 1 : 0,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await submitBot(ctx.env.DB, {
+			username,
+			name: username,
+			description: descriptionPart.replace(/🔎/g, '').trim() || '',
+			category_id: 1,
+			telegram_id: userId,
+			inlinequeries: hasInlineQueries ? 1 : 0,
+		});
 
 		if (result.error) {
 			if (result.error.includes('already in the BotList')) {
@@ -311,15 +320,7 @@ composer.command('spam', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/spam-reports',
-			{
-				bot_username: username,
-				telegram_id: userId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await reportSpam(ctx.env.DB, username, userId);
 
 		if (result.error) {
 			if (result.error.includes('not found')) {
@@ -367,15 +368,7 @@ composer.command('offline', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/offline-reports',
-			{
-				bot_username: username,
-				telegram_id: userId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await reportOffline(ctx.env.DB, username, userId);
 
 		if (result.error) {
 			if (result.error.includes('not found')) {
@@ -401,7 +394,7 @@ composer.command('offline', async (ctx) => {
 // /newbots command
 composer.command('newbots', async (ctx) => {
 	try {
-		const bots = await fetchFromApi<Bot[]>('/bots/new?limit=10', ctx.env.API_BASE_URL, ctx.env.API);
+		const bots = await getNewBots(ctx.env.DB, 10);
 
 		if (bots.length === 0) {
 			await ctx.reply(MESSAGES.NEWBOTS_EMPTY);
@@ -423,7 +416,7 @@ composer.command('newbots', async (ctx) => {
 // /bestbots command
 composer.command('bestbots', async (ctx) => {
 	try {
-		const bots = await fetchFromApi<Bot[]>('/bots/best?limit=10', ctx.env.API_BASE_URL, ctx.env.API);
+		const bots = await getBestBots(ctx.env.DB, 10);
 
 		if (bots.length === 0) {
 			await ctx.reply(MESSAGES.BESTBOTS_EMPTY);
@@ -456,7 +449,7 @@ composer.command('mybots', async (ctx) => {
 	}
 
 	try {
-		const submissions = await fetchFromApi<UserSubmissions>(`/users/${userId}/submissions`, ctx.env.API_BASE_URL, ctx.env.API);
+		const submissions = await getUserSubmissions(ctx.env.DB, userId);
 
 		const { approved, pending } = submissions;
 
@@ -500,15 +493,7 @@ composer.command('subscribe', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/subscriptions',
-			{
-				chat_id: chatId,
-				telegram_id: userId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await subscribe(ctx.env.DB, chatId, userId);
 
 		if (result.error) {
 			if (result.error.includes('Already subscribed')) {
@@ -537,7 +522,7 @@ composer.command('unsubscribe', async (ctx) => {
 	}
 
 	try {
-		const result = await deleteFromApi<ApiResponse>(`/subscriptions/${chatId}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const result = await unsubscribe(ctx.env.DB, chatId);
 
 		if (result.error) {
 			if (result.error.includes('No active subscription')) {
@@ -579,11 +564,10 @@ composer.command('suggest', async (ctx) => {
 
 	const botUsername = usernameMatch[1];
 
-	// Verify bot exists
 	try {
-		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${botUsername}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const bot = await getBotByUsername(ctx.env.DB, botUsername);
 
-		if ('error' in bot) {
+		if (!bot) {
 			await ctx.reply(MESSAGES.SUGGEST_BOT_NOT_FOUND);
 			return;
 		}
@@ -623,12 +607,7 @@ composer.command('rate', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse & { rating?: { avg: number; count: number } }>(
-			`/bots/username/${botUsername}/rate`,
-			{ telegram_id: userId, value },
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await rateBot(ctx.env.DB, botUsername, userId, value);
 
 		if (result.error) {
 			if (result.error.includes('not found')) {

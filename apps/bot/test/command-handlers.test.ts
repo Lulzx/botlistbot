@@ -3,9 +3,12 @@ import { MESSAGES } from '../src/constants';
 
 const commandHandlers: Record<string, (ctx: any) => Promise<void>> = {};
 
-const mockFetchFromApi = vi.fn();
-const mockPostToApi = vi.fn();
-const mockDeleteFromApi = vi.fn();
+const mockSubmitBot = vi.fn();
+const mockReportSpam = vi.fn();
+const mockReportOffline = vi.fn();
+const mockSearchBots = vi.fn();
+const mockSubscribe = vi.fn();
+const mockUnsubscribe = vi.fn();
 
 const mockKeyboards = {
 	createMainKeyboard: vi.fn(() => ({ keyboard: 'main' })),
@@ -18,6 +21,11 @@ const mockKeyboards = {
 	createInlineSearchKeyboard: vi.fn(() => ({ keyboard: 'inline_search' })),
 	createCancelKeyboard: vi.fn(() => ({ keyboard: 'cancel' })),
 	createSuggestionActionsKeyboard: vi.fn(() => ({ keyboard: 'suggestion_actions' })),
+	createConfirmKeyboard: vi.fn(() => ({ keyboard: 'confirm' })),
+	createSuggestionReviewKeyboard: vi.fn(() => ({ keyboard: 'suggestion_review' })),
+	createAdminKeyboard: vi.fn(() => ({ keyboard: 'admin' })),
+	createMyBotsKeyboard: vi.fn(() => ({ keyboard: 'mybots' })),
+	createBackKeyboard: vi.fn(() => ({ keyboard: 'back' })),
 };
 
 vi.mock('grammy/web', () => ({
@@ -32,10 +40,23 @@ vi.mock('grammy/web', () => ({
 	},
 }));
 
-vi.mock('../src/api', () => ({
-	fetchFromApi: mockFetchFromApi,
-	postToApi: mockPostToApi,
-	deleteFromApi: mockDeleteFromApi,
+vi.mock('../src/db', () => ({
+	submitBot: mockSubmitBot,
+	reportSpam: mockReportSpam,
+	reportOffline: mockReportOffline,
+	searchBots: mockSearchBots,
+	subscribe: mockSubscribe,
+	unsubscribe: mockUnsubscribe,
+	getRandomBots: vi.fn().mockResolvedValue([]),
+	getNewBots: vi.fn().mockResolvedValue([]),
+	getBestBots: vi.fn().mockResolvedValue([]),
+	getUserFavorites: vi.fn().mockResolvedValue([]),
+	getUserSubmissions: vi.fn().mockResolvedValue({ approved: [], pending: [] }),
+	addFavorite: vi.fn(),
+	removeFavorite: vi.fn(),
+	getBotByUsername: vi.fn(),
+	createSuggestion: vi.fn(),
+	rateBot: vi.fn(),
 }));
 
 vi.mock('../src/keyboards', () => mockKeyboards);
@@ -52,6 +73,8 @@ const getHandler = (name: string) => {
 	return handler;
 };
 
+const mockDB = {};
+
 const createMockContext = (overrides: Record<string, unknown> = {}) => {
 	const replies: Array<{ text: string; options?: unknown }> = [];
 	const ctx = {
@@ -61,7 +84,7 @@ const createMockContext = (overrides: Record<string, unknown> = {}) => {
 		replyWithSticker: vi.fn(),
 		from: { id: 123 },
 		chat: { id: 456 },
-		env: { API_BASE_URL: 'https://api.example.com', API: undefined },
+		env: { DB: mockDB },
 		match: undefined as string | undefined,
 		...overrides,
 	};
@@ -96,38 +119,33 @@ describe('command handlers', () => {
 
 		await handler(ctx);
 
-		expect(mockPostToApi).not.toHaveBeenCalled();
+		expect(mockSubmitBot).not.toHaveBeenCalled();
 		expect(replies[0]?.text).toBe(MESSAGES.NEW_BOT_PROMPT);
 		expect(replies[0]?.options).toMatchObject({ parse_mode: 'HTML' });
 	});
 
 	it('submits new bot data when provided', async () => {
 		const handler = getHandler('new');
-		mockPostToApi.mockResolvedValueOnce({ success: true });
+		mockSubmitBot.mockResolvedValueOnce({ success: true });
 
 		const { ctx, replies } = createMockContext({ match: '@coolbot - Nice bot' });
 
 		await handler(ctx);
 
-		expect(mockPostToApi).toHaveBeenCalledWith(
-			'/submissions',
-			{
-				username: 'coolbot',
-				name: 'coolbot',
-				description: 'Nice bot',
-				category_id: 1,
-				telegram_id: 123,
-				inlinequeries: 0,
-			},
-			'https://api.example.com',
-			undefined,
-		);
+		expect(mockSubmitBot).toHaveBeenCalledWith(mockDB, {
+			username: 'coolbot',
+			name: 'coolbot',
+			description: 'Nice bot',
+			category_id: 1,
+			telegram_id: 123,
+			inlinequeries: 0,
+		});
 		expect(replies[0]?.text).toBe(MESSAGES.NEW_BOT_SUCCESS);
 	});
 
 	it('shows existing bot message when submission already exists', async () => {
 		const handler = getHandler('new');
-		mockPostToApi.mockResolvedValueOnce({ error: 'already in the BotList' });
+		mockSubmitBot.mockResolvedValueOnce({ error: 'already in the BotList' });
 
 		const { ctx, replies } = createMockContext({ match: '@coolbot' });
 
@@ -138,35 +156,25 @@ describe('command handlers', () => {
 
 	it('returns spam already reported message', async () => {
 		const handler = getHandler('spam');
-		mockPostToApi.mockResolvedValueOnce({ error: 'already reported' });
+		mockReportSpam.mockResolvedValueOnce({ error: 'already reported' });
 
 		const { ctx, replies } = createMockContext({ match: '@annoyingbot' });
 
 		await handler(ctx);
 
-		expect(mockPostToApi).toHaveBeenCalledWith(
-			'/spam-reports',
-			{ bot_username: 'annoyingbot', telegram_id: 123 },
-			'https://api.example.com',
-			undefined,
-		);
+		expect(mockReportSpam).toHaveBeenCalledWith(mockDB, 'annoyingbot', 123);
 		expect(replies[0]?.text).toBe(MESSAGES.SPAM_ALREADY);
 	});
 
 	it('returns offline not found message', async () => {
 		const handler = getHandler('offline');
-		mockPostToApi.mockResolvedValueOnce({ error: 'not found' });
+		mockReportOffline.mockResolvedValueOnce({ error: 'not found' });
 
 		const { ctx, replies } = createMockContext({ match: '@ghostbot' });
 
 		await handler(ctx);
 
-		expect(mockPostToApi).toHaveBeenCalledWith(
-			'/offline-reports',
-			{ bot_username: 'ghostbot', telegram_id: 123 },
-			'https://api.example.com',
-			undefined,
-		);
+		expect(mockReportOffline).toHaveBeenCalledWith(mockDB, 'ghostbot', 123);
 		expect(replies[0]?.text).toBe(MESSAGES.OFFLINE_NOT_FOUND);
 	});
 
@@ -176,7 +184,7 @@ describe('command handlers', () => {
 
 		await handler(ctx);
 
-		expect(mockFetchFromApi).not.toHaveBeenCalled();
+		expect(mockSearchBots).not.toHaveBeenCalled();
 		expect(replies[0]?.text).toBe(MESSAGES.SEARCH_TOO_SHORT);
 	});
 
@@ -186,37 +194,32 @@ describe('command handlers', () => {
 
 		await handler(ctx);
 
-		expect(mockFetchFromApi).not.toHaveBeenCalled();
+		expect(mockSearchBots).not.toHaveBeenCalled();
 		expect(replies[0]?.text).toBe(MESSAGES.SEARCH_PROMPT);
 		expect(replies[0]?.options).toMatchObject({ reply_markup: { keyboard: 'inline_search' } });
 	});
 
 	it('subscribes user to updates', async () => {
 		const handler = getHandler('subscribe');
-		mockPostToApi.mockResolvedValueOnce({ success: true });
+		mockSubscribe.mockResolvedValueOnce({ success: true });
 
 		const { ctx, replies } = createMockContext({ from: { id: 999 }, chat: { id: 111 } });
 
 		await handler(ctx);
 
-		expect(mockPostToApi).toHaveBeenCalledWith(
-			'/subscriptions',
-			{ chat_id: 111, telegram_id: 999 },
-			'https://api.example.com',
-			undefined,
-		);
+		expect(mockSubscribe).toHaveBeenCalledWith(mockDB, 111, 999);
 		expect(replies[0]?.text).toBe(MESSAGES.SUBSCRIBE_SUCCESS);
 	});
 
 	it('unsubscribes user from updates', async () => {
 		const handler = getHandler('unsubscribe');
-		mockDeleteFromApi.mockResolvedValueOnce({ success: true });
+		mockUnsubscribe.mockResolvedValueOnce({ success: true });
 
 		const { ctx, replies } = createMockContext({ chat: { id: 777 } });
 
 		await handler(ctx);
 
-		expect(mockDeleteFromApi).toHaveBeenCalledWith('/subscriptions/777', 'https://api.example.com', undefined);
+		expect(mockUnsubscribe).toHaveBeenCalledWith(mockDB, 777);
 		expect(replies[0]?.text).toBe(MESSAGES.UNSUBSCRIBE_SUCCESS);
 	});
 });

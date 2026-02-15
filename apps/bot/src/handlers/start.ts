@@ -1,5 +1,5 @@
 import { Composer } from 'grammy/web';
-import { type Bot, fetchFromApi } from '../api';
+import { getUserFavorites } from '../db';
 import { DeepLinkAction, MESSAGES } from '../constants';
 import { createEmptyFavoritesKeyboard, createFavoritesKeyboard, createInlineSearchKeyboard, createMainKeyboard } from '../keyboards';
 import { trackActivity } from '../tracking';
@@ -30,7 +30,7 @@ composer.command('start', async (ctx) => {
 					return;
 				}
 				try {
-					const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+					const favorites = await getUserFavorites(ctx.env.DB, userId);
 					if (favorites.length === 0) {
 						await ctx.reply(MESSAGES.FAVORITES_EMPTY, {
 							parse_mode: 'HTML',

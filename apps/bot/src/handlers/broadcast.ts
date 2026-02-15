@@ -1,5 +1,5 @@
 import { Composer } from 'grammy/web';
-import { fetchFromApi } from '../api';
+import { getAllActiveSubscribers } from '../db';
 import { isAdminId } from '../config';
 import { MESSAGES } from '../constants';
 import { createConfirmKeyboard } from '../keyboards';
@@ -41,14 +41,12 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 	}
 
 	// Extract broadcast text from the preview message
-	// Preview format: "📢 Preview:\n\n{text}\n\nSend to all subscribers?"
 	const messageText = ctx.callbackQuery.message?.text;
 	if (!messageText) {
 		await ctx.answerCallbackQuery({ text: 'Could not retrieve broadcast text' });
 		return;
 	}
 
-	// Parse text between "📢 Preview:\n\n" and "\n\nSend to all subscribers?"
 	const prefix = '📢 Preview:\n\n';
 	const suffix = '\n\nSend to all subscribers?';
 	const startIdx = messageText.indexOf(prefix);
@@ -68,7 +66,7 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 	await ctx.answerCallbackQuery({ text: 'Broadcasting...' });
 
 	try {
-		const subscribers = await fetchFromApi<Array<{ chat_id: number }>>(`/subscriptions?admin_id=${adminId}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const subscribers = await getAllActiveSubscribers(ctx.env.DB);
 
 		let sentCount = 0;
 		for (const sub of subscribers) {

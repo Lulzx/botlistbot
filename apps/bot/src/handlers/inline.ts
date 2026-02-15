@@ -1,5 +1,7 @@
 import { Composer, InlineQueryResultBuilder } from 'grammy/web';
-import { type Bot, type Category, fetchFromApi } from '../api';
+import { CATEGORIES } from '@botlistbot/shared';
+import type { Category } from '@botlistbot/shared';
+import { type Bot, searchBots } from '../db';
 import { CATEGORY_NAMES } from '../constants';
 import type { MyContext } from '../types';
 
@@ -92,7 +94,7 @@ composer.on('inline_query', async (ctx) => {
 		const start = Number.isNaN(offset) ? 0 : offset;
 
 		if (query === '') {
-			const categories = await fetchFromApi<Category[]>('/categories', ctx.env.API_BASE_URL, ctx.env.API);
+			const categories = CATEGORIES;
 			const results = [
 				buildStartResult(start),
 				...categories.slice(start, start + INLINE_PAGE_SIZE).map((category, index) => buildCategoryResult(category, start + index)),
@@ -119,17 +121,18 @@ composer.on('inline_query', async (ctx) => {
 		}
 
 		try {
-			const searchParams = new URLSearchParams();
 			const sanitizedQuery = query.replace(/^@+/, '');
 
+			const searchOpts: { name?: string; username?: string; description?: string } = {
+				name: sanitizedQuery,
+				description: sanitizedQuery,
+			};
+
 			if (query.startsWith('@')) {
-				searchParams.append('username', sanitizedQuery);
+				searchOpts.username = sanitizedQuery;
 			}
 
-			searchParams.append('name', sanitizedQuery);
-			searchParams.append('description', sanitizedQuery);
-
-			const bots = await fetchFromApi<Bot[]>(`/search?${searchParams.toString()}`, ctx.env.API_BASE_URL, ctx.env.API);
+			const bots = await searchBots(ctx.env.DB, searchOpts);
 
 			if (bots.length === 0) {
 				return await ctx.answerInlineQuery(

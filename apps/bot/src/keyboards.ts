@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import type { Bot, Suggestion } from './api';
+import type { Bot, Suggestion } from './db';
 import { CATEGORIES } from './constants';
 import type { MyContext } from './types';
 

@@ -1,5 +1,5 @@
 import { Composer } from 'grammy/web';
-import { type Bot, fetchFromApi } from '../api';
+import { getBotsByCategory } from '../db';
 import { CATEGORY_NAMES } from '../constants';
 import type { MyContext } from '../types';
 
@@ -21,7 +21,7 @@ composer.on('chosen_inline_result', async (ctx) => {
 			}
 
 			try {
-				const bots = await fetchFromApi<Bot[]>(`/bots/category/${categoryId}`, ctx.env.API_BASE_URL, ctx.env.API);
+				const bots = await getBotsByCategory(ctx.env.DB, Number(categoryId));
 
 				const categoryName = CATEGORY_NAMES[Number(categoryId)] || `Category ${categoryId}`;
 

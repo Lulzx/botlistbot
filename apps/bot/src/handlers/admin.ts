@@ -4,16 +4,26 @@ import {
 	type ApiResponse,
 	type Bot,
 	type BotSubmission,
-	type Keyword,
-	type StatisticEntry,
-	type StatisticsSummary,
 	type Suggestion,
+	type StatisticsSummary,
 	type UserInfo,
-	deleteFromApi,
-	fetchFromApi,
-	postToApi,
-	putToApi,
-} from '../api';
+	isUserAdmin,
+	getPendingSubmissions,
+	approveSubmission,
+	rejectSubmission,
+	addBot,
+	updateBot,
+	banUser,
+	unbanUser,
+	getUserInfo,
+	getBotByUsername,
+	addKeyword,
+	removeKeyword,
+	getPendingSuggestions,
+	acceptSuggestion,
+	rejectSuggestion,
+	getStatisticsSummary,
+} from '../db';
 import { isAdminId } from '../config';
 import { CATEGORIES, CATEGORY_NAMES, MESSAGES } from '../constants';
 import { createAdminKeyboard, createSuggestionReviewKeyboard } from '../keyboards';
@@ -29,15 +39,10 @@ async function isAdmin(ctx: MyContext): Promise<boolean> {
 	const userId = ctx.from?.id;
 	if (!userId) return false;
 
-	// Check config first (env-based admins)
-	if (isAdminId(userId, ctx.env)) {
-		return true;
-	}
+	if (isAdminId(userId, ctx.env)) return true;
 
-	// Fall back to database check
 	try {
-		const result = await fetchFromApi<{ is_admin: boolean }>(`/admin/check/${userId}`, ctx.env.API_BASE_URL, ctx.env.API);
-		return result.is_admin;
+		return await isUserAdmin(ctx.env.DB, userId);
 	} catch {
 		return false;
 	}
@@ -93,15 +98,7 @@ const buildSubmissionsKeyboard = (submissions: BotSubmission[]) => {
 
 const renderPendingSubmissions = async (ctx: MyContext, adminId: number, preferEdit = false) => {
 	try {
-		const submissions = await fetchFromApi<BotSubmission[] | { error: string }>(
-			`/admin/submissions/pending?admin_id=${adminId}&limit=${PENDING_LIMIT}`,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
-
-		if (!Array.isArray(submissions)) {
-			throw new Error(submissions.error || 'Failed to load submissions');
-		}
+		const submissions = await getPendingSubmissions(ctx.env.DB, adminId, PENDING_LIMIT);
 
 		const hasPending = submissions.length > 0;
 		const keyboard = hasPending ? buildSubmissionsKeyboard(submissions) : createAdminKeyboard();
@@ -152,12 +149,7 @@ const handleSubmissionDecision = async (
 ) => {
 	try {
 		if (decision === 'approve') {
-			const result = await postToApi<Bot | ApiResponse>(
-				`/admin/submissions/${submissionId}/approve`,
-				{ admin_telegram_id: adminId },
-				ctx.env.API_BASE_URL,
-				ctx.env.API,
-			);
+			const result = await approveSubmission(ctx.env.DB, submissionId, adminId);
 
 			if ('error' in result && result.error) {
 				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
@@ -178,12 +170,7 @@ const handleSubmissionDecision = async (
 
 			await renderPendingSubmissions(ctx, adminId, true);
 		} else {
-			const result = await postToApi<ApiResponse>(
-				`/admin/submissions/${submissionId}/reject`,
-				{ admin_telegram_id: adminId },
-				ctx.env.API_BASE_URL,
-				ctx.env.API,
-			);
+			const result = await rejectSubmission(ctx.env.DB, submissionId, adminId);
 
 			if (result.error) {
 				const errorMsg = result.error;
@@ -261,9 +248,9 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 		}
 
 		try {
-			const endpoint = isAccept ? `/admin/suggestions/${suggestionId}/accept` : `/admin/suggestions/${suggestionId}/reject`;
-
-			const result = await postToApi<ApiResponse>(endpoint, { admin_telegram_id: adminId }, ctx.env.API_BASE_URL, ctx.env.API);
+			const result = isAccept
+				? await acceptSuggestion(ctx.env.DB, suggestionId, adminId)
+				: await rejectSuggestion(ctx.env.DB, suggestionId, adminId);
 
 			if (result.error) {
 				await ctx.answerCallbackQuery({ text: result.error, show_alert: true });
@@ -325,11 +312,12 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 			return;
 		case 'stats': {
 			try {
-				const summary = await fetchFromApi<StatisticsSummary>(
-					`/admin/statistics/summary?admin_id=${adminId}`,
-					ctx.env.API_BASE_URL,
-					ctx.env.API,
-				);
+				const summary = await getStatisticsSummary(ctx.env.DB, adminId);
+
+				if (!summary) {
+					await ctx.answerCallbackQuery({ text: 'Unauthorized', show_alert: true });
+					return;
+				}
 
 				let message = '📊 <b>Statistics</b>\n\n';
 				message += '<b>Totals:</b>\n';
@@ -411,18 +399,13 @@ composer.command('addbot', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<Bot | ApiResponse>(
-			'/admin/bots',
-			{
-				username,
-				name,
-				description,
-				category_id: categoryId,
-				admin_telegram_id: adminId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await addBot(ctx.env.DB, {
+			username,
+			name,
+			description,
+			category_id: categoryId,
+			admin_telegram_id: adminId,
+		});
 
 		if ('error' in result && result.error) {
 			const errorMsg = result.error;
@@ -480,16 +463,14 @@ composer.command('updatebot', async (ctx) => {
 		return;
 	}
 
-	const payload: Record<string, unknown> = {
-		admin_telegram_id: adminId,
-	};
+	const updates: Record<string, unknown> = {};
 
 	if (name && name !== '-') {
-		payload.name = name;
+		updates.name = name;
 	}
 
 	if (description !== undefined && description !== '-') {
-		payload.description = description || '';
+		updates.description = description || '';
 	}
 
 	if (categoryInput && categoryInput !== '-') {
@@ -498,16 +479,16 @@ composer.command('updatebot', async (ctx) => {
 			await ctx.reply(MESSAGES.ADMIN_CATEGORY_INVALID);
 			return;
 		}
-		payload.category_id = categoryId;
+		updates.category_id = categoryId;
 	}
 
-	if (Object.keys(payload).length === 1) {
+	if (Object.keys(updates).length === 0) {
 		await ctx.reply(MESSAGES.ADMIN_UPDATE_NO_CHANGES);
 		return;
 	}
 
 	try {
-		const result = await putToApi<Bot | ApiResponse>(`/admin/bots/username/${username}`, payload, ctx.env.API_BASE_URL, ctx.env.API);
+		const result = await updateBot(ctx.env.DB, username, adminId, updates as Parameters<typeof updateBot>[3]);
 
 		if ('error' in result && result.error) {
 			const errorMsg = result.error;
@@ -556,7 +537,6 @@ composer.command('ban', async (ctx) => {
 		return;
 	}
 
-	// Check if user is admin
 	if (!(await isAdmin(ctx))) {
 		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
 		return;
@@ -575,15 +555,7 @@ composer.command('ban', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/admin/ban',
-			{
-				user_id: userId,
-				admin_telegram_id: adminId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await banUser(ctx.env.DB, userId, adminId);
 
 		if (result.error) {
 			await ctx.reply(`Error: ${result.error}`);
@@ -607,7 +579,6 @@ composer.command('unban', async (ctx) => {
 		return;
 	}
 
-	// Check if user is admin
 	if (!(await isAdmin(ctx))) {
 		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
 		return;
@@ -626,15 +597,7 @@ composer.command('unban', async (ctx) => {
 	}
 
 	try {
-		const result = await postToApi<ApiResponse>(
-			'/admin/unban',
-			{
-				user_id: userId,
-				admin_telegram_id: adminId,
-			},
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await unbanUser(ctx.env.DB, userId, adminId);
 
 		if (result.error) {
 			if (result.error.includes('not found')) {
@@ -662,7 +625,6 @@ composer.command('userinfo', async (ctx) => {
 		return;
 	}
 
-	// Check if user is admin
 	if (!(await isAdmin(ctx))) {
 		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
 		return;
@@ -681,13 +643,9 @@ composer.command('userinfo', async (ctx) => {
 	}
 
 	try {
-		const result = await fetchFromApi<UserInfo | { error: string }>(
-			`/admin/userinfo/${userId}?admin_id=${adminId}`,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await getUserInfo(ctx.env.DB, userId, adminId);
 
-		if ('error' in result) {
+		if ('error' in result && result.error) {
 			if (result.error.includes('not found')) {
 				await ctx.reply(MESSAGES.ADMIN_USERINFO_NOT_FOUND);
 			} else {
@@ -696,7 +654,8 @@ composer.command('userinfo', async (ctx) => {
 			return;
 		}
 
-		const { user, submitted_bots, pending_submissions, spam_reports } = result;
+		const info = result as UserInfo;
+		const { user, submitted_bots, pending_submissions, spam_reports } = info;
 
 		let message = '<b>User Info</b>\n\n';
 		message += `<b>Telegram ID:</b> <code>${user.telegram_id}</code>\n`;
@@ -708,7 +667,7 @@ composer.command('userinfo', async (ctx) => {
 
 		message += `<b>Submitted Bots (${submitted_bots.length}):</b>\n`;
 		if (submitted_bots.length > 0) {
-			message += submitted_bots.map((bot) => `• @${bot.username}`).join('\n');
+			message += submitted_bots.map((bot: Bot) => `• @${bot.username}`).join('\n');
 		} else {
 			message += 'None';
 		}
@@ -716,7 +675,7 @@ composer.command('userinfo', async (ctx) => {
 
 		message += `<b>Pending Submissions (${pending_submissions.length}):</b>\n`;
 		if (pending_submissions.length > 0) {
-			message += pending_submissions.map((bot) => `• @${bot.username}`).join('\n');
+			message += pending_submissions.map((bot: BotSubmission) => `• @${bot.username}`).join('\n');
 		} else {
 			message += 'None';
 		}
@@ -724,7 +683,7 @@ composer.command('userinfo', async (ctx) => {
 
 		message += `<b>Spam Reports Made (${spam_reports.length}):</b>\n`;
 		if (spam_reports.length > 0) {
-			message += spam_reports.map((report) => `• @${report.bot_username}`).join('\n');
+			message += spam_reports.map((report: UserInfo['spam_reports'][0]) => `• @${report.bot_username}`).join('\n');
 		} else {
 			message += 'None';
 		}
@@ -773,22 +732,16 @@ composer.command('addkeyword', async (ctx) => {
 	}
 
 	try {
-		// First find the bot
-		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${username}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const bot = await getBotByUsername(ctx.env.DB, username);
 
-		if ('error' in bot) {
+		if (!bot) {
 			await ctx.reply('❌ Bot not found.');
 			return;
 		}
 
-		const result = await postToApi<Keyword | ApiResponse>(
-			`/bots/${bot.id}/keywords`,
-			{ name: keyword, admin_telegram_id: adminId },
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await addKeyword(ctx.env.DB, bot.id, keyword, adminId);
 
-		if ('error' in result) {
+		if (result.error) {
 			await ctx.reply(`Error: ${result.error}`);
 			return;
 		}
@@ -836,18 +789,14 @@ composer.command('removekeyword', async (ctx) => {
 	}
 
 	try {
-		const bot = await fetchFromApi<Bot | { error: string }>(`/bots/username/${username}`, ctx.env.API_BASE_URL, ctx.env.API);
+		const bot = await getBotByUsername(ctx.env.DB, username);
 
-		if ('error' in bot) {
+		if (!bot) {
 			await ctx.reply('❌ Bot not found.');
 			return;
 		}
 
-		const result = await deleteFromApi<ApiResponse>(
-			`/bots/${bot.id}/keywords/${encodeURIComponent(keyword)}`,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const result = await removeKeyword(ctx.env.DB, bot.id, keyword, adminId);
 
 		if (result.error) {
 			await ctx.reply(`Error: ${result.error}`);
@@ -867,15 +816,7 @@ const SUGGESTION_LIMIT = 5;
 
 const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferEdit = false) => {
 	try {
-		const suggestions = await fetchFromApi<Suggestion[] | { error: string }>(
-			`/admin/suggestions/pending?admin_id=${adminId}&limit=${SUGGESTION_LIMIT}`,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
-
-		if (!Array.isArray(suggestions)) {
-			throw new Error(suggestions.error || 'Failed to load suggestions');
-		}
+		const suggestions = await getPendingSuggestions(ctx.env.DB, adminId, SUGGESTION_LIMIT);
 
 		const hasPending = suggestions.length > 0;
 
@@ -962,11 +903,12 @@ composer.command('stats', async (ctx) => {
 	}
 
 	try {
-		const summary = await fetchFromApi<StatisticsSummary>(
-			`/admin/statistics/summary?admin_id=${adminId}`,
-			ctx.env.API_BASE_URL,
-			ctx.env.API,
-		);
+		const summary = await getStatisticsSummary(ctx.env.DB, adminId);
+
+		if (!summary) {
+			await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
+			return;
+		}
 
 		let message = '📊 <b>Statistics</b>\n\n';
 		message += '<b>Totals:</b>\n';

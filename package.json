@@ -11,9 +11,7 @@
     "deploy": "turbo run deploy",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "dev:api": "turbo run dev --filter=api",
     "dev:bot": "turbo run dev --filter=bot",
-    "deploy:api": "turbo run deploy --filter=api",
     "deploy:bot": "turbo run deploy --filter=bot"
   },
   "devDependencies": {

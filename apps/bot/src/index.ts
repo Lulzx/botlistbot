@@ -1,36 +1,22 @@
 import { Bot, webhookCallback } from 'grammy/web';
 import { Hono } from 'hono';
+import { ensureDatabase } from './db';
 import { composer } from './handlers/index';
 import type { HonoContext, MyContext } from './types';
 
 const app = new Hono<HonoContext>();
 
-// Environment validation middleware
-const validateEnvironment = (c: HonoContext['Bindings']) => {
-	const requiredVars = ['BOT_TOKEN', 'API_BASE_URL'];
-	const missing = requiredVars.filter((varName) => !c[varName as keyof typeof c]);
-
-	if (missing.length > 0) {
-		console.error(`Missing required environment variables: ${missing.join(', ')}`);
-		return false;
-	}
-
-	return true;
-};
-
 app.post('/:token', async (c) => {
 	const rt = c.req.param('token');
 
-	console.log(`Received webhook request with token: ${rt}`);
-	console.log(`Expected token: ${c.env.BOT_TOKEN}`);
-
-	// Validate environment variables
-	if (!validateEnvironment(c.env)) {
+	if (!c.env.BOT_TOKEN) {
+		console.error('Missing required environment variable: BOT_TOKEN');
 		return c.text('Server configuration error', 500);
 	}
 
 	if (rt === c.env.BOT_TOKEN) {
-		console.log('Token validated, initializing bot...');
+		await ensureDatabase(c.env);
+
 		const bot: Bot<MyContext> = new Bot<MyContext>(c.env.BOT_TOKEN);
 
 		bot.use((ctx, next) => {
@@ -46,7 +32,6 @@ app.post('/:token', async (c) => {
 		});
 
 		try {
-			console.log('Processing webhook with grammy...');
 			const callback = webhookCallback(bot, 'hono');
 			return callback(c);
 		} catch (ex) {
@@ -61,7 +46,6 @@ app.post('/:token', async (c) => {
 });
 
 app.get('/', (c) => {
-	console.log('Status endpoint accessed');
 	return c.text(
 		'Bot is running! Set up your webhook at: https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=<YOUR_WORKER_URL>/<YOUR_TOKEN>',
 	);

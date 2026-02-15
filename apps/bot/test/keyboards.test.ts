@@ -10,7 +10,7 @@ import {
 	createBackKeyboard,
 	createConfirmKeyboard,
 } from '../src/keyboards';
-import type { Bot } from '../src/api';
+import type { Bot } from '../src/db';
 
 // Helper to extract callback_data from buttons
 function getCallbackData(button: unknown): string | undefined {

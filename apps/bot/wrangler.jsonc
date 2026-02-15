@@ -3,18 +3,20 @@
 	"name": "botlist-bot",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-04-02",
-	"vars": {
-		"API_BASE_URL": "https://botlist-api.lulz.workers.dev"
-	},
 	"observability": {
 		"enabled": true
 	},
 	"placement": {
 		"mode": "smart"
 	},
-	"services": [
-		{ "binding": "API", "service": "botlist-api" }
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "botlist-api-db",
+			"database_id": "74d93525-a5c0-462c-bcfb-9f8a0d7451f4"
+		}
 	]
-	// Note: BOT_TOKEN should be set as a secret, not in vars
+	// Note: BOT_TOKEN and ADMIN_IDS should be set as secrets
 	// Run: wrangler secret put BOT_TOKEN --cwd apps/bot
+	// Run: wrangler secret put ADMIN_IDS --cwd apps/bot
 }
