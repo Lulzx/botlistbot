@@ -218,7 +218,7 @@ const MIGRATION_STATEMENTS = [
 ];
 
 // Bump this when adding migrations so warm isolates re-run them
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 let dbInitPromise: Promise<void> | null = null;
 let initSchemaVersion: number | null = null;
 
@@ -274,6 +274,31 @@ export function ensureDatabase(env: { DB: D1Database; ADMIN_IDS?: string }): Pro
 			} catch {
 				try {
 					await db.prepare('ALTER TABLE bot_submissions ADD COLUMN inlinequeries INTEGER DEFAULT 0').run();
+				} catch {
+					/* already exists */
+				}
+			}
+			// Add missing bots columns (approved, spam, offline, submitted_by)
+			try {
+				await db.prepare('SELECT approved FROM bots LIMIT 1').first();
+			} catch {
+				try {
+					await db.prepare('ALTER TABLE bots ADD COLUMN approved INTEGER DEFAULT 1').run();
+				} catch {
+					/* already exists */
+				}
+				try {
+					await db.prepare('ALTER TABLE bots ADD COLUMN spam INTEGER DEFAULT 0').run();
+				} catch {
+					/* already exists */
+				}
+				try {
+					await db.prepare('ALTER TABLE bots ADD COLUMN offline INTEGER DEFAULT 0').run();
+				} catch {
+					/* already exists */
+				}
+				try {
+					await db.prepare('ALTER TABLE bots ADD COLUMN submitted_by INTEGER REFERENCES users(id)').run();
 				} catch {
 					/* already exists */
 				}
