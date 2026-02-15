@@ -117,6 +117,7 @@ describe('command handlers', () => {
 				description: 'Nice bot',
 				category_id: 1,
 				telegram_id: 123,
+				inlinequeries: 0,
 			},
 			'https://api.example.com',
 			undefined,

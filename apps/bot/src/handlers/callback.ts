@@ -104,6 +104,32 @@ composer.on('callback_query:data', async (ctx) => {
 			return;
 		}
 
+		if (data.startsWith('fav_page:')) {
+			const page = Number.parseInt(data.split(':')[1], 10);
+			const userId = ctx.from?.id;
+			if (!userId || Number.isNaN(page)) {
+				await ctx.answerCallbackQuery({ text: 'Could not load page' });
+				return;
+			}
+
+			const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+
+			if (favorites.length === 0) {
+				await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
+					parse_mode: 'HTML',
+					reply_markup: createEmptyFavoritesKeyboard(),
+				});
+			} else {
+				const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
+				await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
+					parse_mode: 'HTML',
+					reply_markup: createFavoritesKeyboard(favorites, page),
+				});
+			}
+			await ctx.answerCallbackQuery();
+			return;
+		}
+
 		if (data === 'fav_add') {
 			await ctx.answerCallbackQuery();
 			await ctx.reply(`${MESSAGES.FAVORITES_ADD_PROMPT}\n\nUse /favorite @username to add one instantly.`);
@@ -171,20 +197,13 @@ composer.on('callback_query:data', async (ctx) => {
 		}
 
 		if (data === 'explore_fav') {
-			await ctx.answerCallbackQuery({ text: 'Send me @username to add to favorites' });
-			await ctx.reply(`${MESSAGES.FAVORITES_ADD_PROMPT}\n\nUse /favorite @username to add one instantly.`);
+			await ctx.answerCallbackQuery();
+			await ctx.reply('Use /favorite @username to add a bot to your favorites.');
 			return;
 		}
 
 		if (data === 'search_more' || data.startsWith('search_more:')) {
-			const queryFromData = data.startsWith('search_more:') ? decodeURIComponent(data.replace('search_more:', '')) : undefined;
-			let query = queryFromData;
-
-			if (!query) {
-				const messageText = ctx.callbackQuery.message?.text;
-				const queryMatch = messageText?.match(/for "<b>(.+?)<\/b>":/);
-				query = queryMatch?.[1];
-			}
+			const query = data.startsWith('search_more:') ? decodeURIComponent(data.replace('search_more:', '')) : undefined;
 
 			if (!query) {
 				await ctx.answerCallbackQuery({ text: 'Could not find your search query. Please run /search again.' });

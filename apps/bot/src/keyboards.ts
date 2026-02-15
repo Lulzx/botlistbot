@@ -35,15 +35,30 @@ export const createCategoriesKeyboard = async (_ctx: MyContext) => {
 	}
 };
 
-export const createFavoritesKeyboard = (favorites: Bot[]) => {
-	const keyboard = new InlineKeyboard();
+const FAVORITES_PAGE_SIZE = 10;
 
-	// Add buttons for each favorite bot
-	for (const bot of favorites.slice(0, 10)) {
+export const createFavoritesKeyboard = (favorites: Bot[], page = 0) => {
+	const keyboard = new InlineKeyboard();
+	const start = page * FAVORITES_PAGE_SIZE;
+	const pageItems = favorites.slice(start, start + FAVORITES_PAGE_SIZE);
+
+	for (const bot of pageItems) {
 		keyboard.row(
 			{ text: `@${bot.username}`, url: `https://t.me/${bot.username}` },
 			{ text: '❌ Remove', callback_data: `fav_remove:${bot.username}` },
 		);
+	}
+
+	// Pagination row
+	const navButtons: Array<{ text: string; callback_data: string }> = [];
+	if (page > 0) {
+		navButtons.push({ text: '⬅️ Previous', callback_data: `fav_page:${page - 1}` });
+	}
+	if (start + FAVORITES_PAGE_SIZE < favorites.length) {
+		navButtons.push({ text: '➡️ Next', callback_data: `fav_page:${page + 1}` });
+	}
+	if (navButtons.length > 0) {
+		keyboard.row(...navButtons);
 	}
 
 	keyboard.row({ text: '➕ Add Bot', callback_data: 'fav_add' }, { text: '🔄 Refresh', callback_data: 'fav_refresh' });

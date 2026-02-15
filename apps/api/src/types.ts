@@ -24,10 +24,8 @@ export interface Bot {
   updated_at: string;
 }
 
-export interface Category {
-  id: number;
-  name: string;
-}
+import type { Category } from "@botlistbot/shared";
+export type { Category } from "@botlistbot/shared";
 
 export interface User {
   id: number;

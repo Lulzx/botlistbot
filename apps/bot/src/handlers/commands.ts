@@ -241,6 +241,9 @@ composer.command('new', async (ctx) => {
 		.replace(/^\s*-?\s*/, '')
 		.trim();
 
+	// Detect inline queries support via 🔎 emoji
+	const hasInlineQueries = /🔎/.test(input);
+
 	const userId = ctx.from?.id;
 	if (!userId) {
 		await ctx.reply('Could not identify your user ID.');
@@ -253,9 +256,10 @@ composer.command('new', async (ctx) => {
 			{
 				username,
 				name: username,
-				description: descriptionPart || '',
+				description: descriptionPart.replace(/🔎/g, '').trim() || '',
 				category_id: 1, // Default category
 				telegram_id: userId,
+				inlinequeries: hasInlineQueries ? 1 : 0,
 			},
 			ctx.env.API_BASE_URL,
 			ctx.env.API,

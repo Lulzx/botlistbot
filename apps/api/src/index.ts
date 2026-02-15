@@ -1,36 +1,6 @@
 import { Hono } from "hono";
-import type { HonoContext, Category, Bot, User, Subscription, BotSubmission, Keyword, Suggestion, Statistic, Country } from "./types";
-
-const CATEGORIES: Category[] = [
-    { id: 1, name: "🌿 Miscellaneous" },
-    { id: 2, name: "👥 Social" },
-    { id: 3, name: "🙋‍♂️ Promoting" },
-    { id: 4, name: "🛍 Shopping" },
-    { id: 5, name: "😂 Humor" },
-    { id: 6, name: "🎮 Gaming" },
-    { id: 7, name: "🏋️‍♂️ HTML5 Games" },
-    { id: 8, name: "🤖 Bot creating" },
-    { id: 9, name: "⚒ Sticker pack creation" },
-    { id: 10, name: "🧸 Stickers & Gif's" },
-    { id: 11, name: "🍟 Video" },
-    { id: 12, name: "📸 Photography" },
-    { id: 13, name: "🎧 Music" },
-    { id: 14, name: "⚽ Sports" },
-    { id: 15, name: "☔️ Weather" },
-    { id: 16, name: "📰 News" },
-    { id: 17, name: "✈️ Places & Traveling" },
-    { id: 18, name: "📞 Android & Tech News" },
-    { id: 19, name: "📲 Apps & software" },
-    { id: 20, name: "📚 Books & Magazines" },
-    { id: 21, name: "📓 Translation and dictionaries" },
-    { id: 22, name: "💳 Public ID's" },
-    { id: 23, name: "📝 Text Formatting" },
-    { id: 24, name: "📦 Multiuse" },
-    { id: 25, name: "🛠️ Group & channel tools" },
-    { id: 26, name: "🍃 Inline Web Search" },
-    { id: 27, name: "⏰ Organization and reminders" },
-    { id: 28, name: "⚙️ Tools" }
-  ];
+import { CATEGORIES } from "@botlistbot/shared";
+import type { HonoContext, Bot, User, Subscription, BotSubmission, Keyword, Suggestion, Statistic, Country } from "./types";
 
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -66,6 +36,7 @@ const SCHEMA_STATEMENTS = [
     description TEXT DEFAULT '',
     category_id INTEGER NOT NULL DEFAULT 1,
     submitted_by INTEGER NOT NULL REFERENCES users(id),
+    inlinequeries INTEGER DEFAULT 0,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
@@ -255,6 +226,12 @@ const ensureDatabase = (db: D1Database) => {
         try { await db.prepare("ALTER TABLE bots ADD COLUMN country_id INTEGER REFERENCES countries(id)").run(); } catch { /* already exists */ }
         try { await db.prepare("ALTER TABLE bots ADD COLUMN inlinequeries INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
       }
+      // Add inlinequeries column to bot_submissions if missing
+      try {
+        await db.prepare("SELECT inlinequeries FROM bot_submissions LIMIT 1").first();
+      } catch {
+        try { await db.prepare("ALTER TABLE bot_submissions ADD COLUMN inlinequeries INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
+      }
       return;
     }
 
@@ -317,6 +294,101 @@ const clampNumber = (value: number, min: number, max: number) => Math.min(Math.m
 
 app.get("/", (c) => {
   return c.text("GET /search?username=file&name=convert&description=audio");
+});
+
+app.get("/docs", (c) => {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BotListBot API Documentation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; background: #f8f9fa; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.3rem; margin: 2rem 0 1rem; padding-bottom: 0.3rem; border-bottom: 2px solid #e0e0e0; }
+  p.subtitle { color: #666; margin-bottom: 2rem; }
+  .endpoint { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 0.75rem; padding: 0.75rem 1rem; display: flex; align-items: baseline; gap: 0.75rem; }
+  .method { font-weight: 700; font-size: 0.8rem; padding: 0.15rem 0.5rem; border-radius: 4px; min-width: 52px; text-align: center; display: inline-block; }
+  .get { background: #e7f5e7; color: #1b7a1b; }
+  .post { background: #e7ecf5; color: #1b4a7a; }
+  .put { background: #f5f0e7; color: #7a5a1b; }
+  .delete { background: #f5e7e7; color: #7a1b1b; }
+  .path { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.9rem; }
+  .desc { color: #666; font-size: 0.85rem; margin-left: auto; }
+</style>
+</head>
+<body>
+<h1>BotListBot API</h1>
+<p class="subtitle">REST API for the BotList Telegram bot directory</p>
+
+<h2>Public</h2>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/categories</span><span class="desc">List all bot categories</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/search?name=&amp;username=&amp;description=</span><span class="desc">Search bots (also searches keywords)</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/keywords/search?q=</span><span class="desc">Search bots by keyword</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/random?limit=</span><span class="desc">Random bots for exploration</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/new?limit=</span><span class="desc">Recently added bots</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/best?limit=</span><span class="desc">Top-rated bots</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/category/:id</span><span class="desc">Bots in a category</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/username/:username</span><span class="desc">Get bot by username</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/:id/keywords</span><span class="desc">Keywords for a bot</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/countries</span><span class="desc">Supported languages/regions</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/gimme</span><span class="desc">Get all bots</span></div>
+
+<h2>Users</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/users</span><span class="desc">Create or get user { telegram_id, username?, first_name? }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/users/:telegramId</span><span class="desc">Get user by Telegram ID</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/users/:telegramId/banned</span><span class="desc">Check if user is banned</span></div>
+
+<h2>Favorites</h2>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/users/:telegramId/favorites</span><span class="desc">Get user's favorite bots</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/users/:telegramId/favorites</span><span class="desc">Add favorite { bot_username }</span></div>
+<div class="endpoint"><span class="method delete">DELETE</span><span class="path">/users/:telegramId/favorites/:botUsername</span><span class="desc">Remove from favorites</span></div>
+
+<h2>Subscriptions</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/subscriptions</span><span class="desc">Subscribe { chat_id, telegram_id }</span></div>
+<div class="endpoint"><span class="method delete">DELETE</span><span class="path">/subscriptions/:chatId</span><span class="desc">Unsubscribe</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/subscriptions/:chatId</span><span class="desc">Check subscription status</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/subscriptions</span><span class="desc">All active subscribers</span></div>
+
+<h2>Submissions</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/submissions</span><span class="desc">Submit new bot { username, name, description, category_id, telegram_id, inlinequeries? }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/users/:telegramId/submissions</span><span class="desc">User's submissions (approved + pending)</span></div>
+
+<h2>Reports</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/spam-reports</span><span class="desc">Report spam { bot_username, telegram_id, reason? }</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/offline-reports</span><span class="desc">Report offline { bot_username, telegram_id }</span></div>
+
+<h2>Suggestions</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/suggestions</span><span class="desc">Create suggestion { telegram_id, bot_username, action, value? }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/:id/suggestions</span><span class="desc">Pending suggestions for a bot</span></div>
+
+<h2>Statistics</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/statistics</span><span class="desc">Log activity { telegram_id?, action, entity?, level? }</span></div>
+
+<h2>Keywords (Admin)</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/bots/:id/keywords</span><span class="desc">Add keyword { name, admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method delete">DELETE</span><span class="path">/bots/:id/keywords/:name?admin_id=</span><span class="desc">Remove keyword</span></div>
+
+<h2>Admin</h2>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/submissions/pending?admin_id=</span><span class="desc">Pending submissions</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/submissions/:id/approve</span><span class="desc">Approve { admin_telegram_id, name?, description?, category_id? }</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/submissions/:id/reject</span><span class="desc">Reject { admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/bots</span><span class="desc">Add bot { username, name, description, category_id, admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method put">PUT</span><span class="path">/admin/bots/username/:username</span><span class="desc">Update bot { admin_telegram_id, name?, description?, category_id?, country_id?, inlinequeries? }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/suggestions/pending?admin_id=</span><span class="desc">Pending suggestions</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/suggestions/:id/accept</span><span class="desc">Accept suggestion { admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/suggestions/:id/reject</span><span class="desc">Reject suggestion { admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/statistics?admin_id=&amp;limit=&amp;level=</span><span class="desc">Activity logs</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/statistics/summary?admin_id=</span><span class="desc">Stats summary</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/ban</span><span class="desc">Ban user { user_id, admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/admin/unban</span><span class="desc">Unban user { user_id, admin_telegram_id }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/userinfo/:userId?admin_id=</span><span class="desc">User profile &amp; activity</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/admin/check/:telegramId</span><span class="desc">Check if user is admin</span></div>
+</body>
+</html>`;
+  return c.html(html);
 });
 
 app.get("/categories", (c) => {
@@ -817,6 +889,7 @@ app.post("/submissions", async (c) => {
     description: string;
     category_id: number;
     telegram_id: number;
+    inlinequeries?: number;
   }>();
 
   if (!body.username || !body.telegram_id) {
@@ -849,14 +922,15 @@ app.post("/submissions", async (c) => {
     }
 
     await c.env.DB.prepare(`
-      INSERT INTO bot_submissions (username, name, description, category_id, submitted_by, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))
+      INSERT INTO bot_submissions (username, name, description, category_id, submitted_by, inlinequeries, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
     `).bind(
       body.username.replace('@', ''),
       body.name || body.username,
       body.description || '',
       body.category_id || 1,
-      user.id
+      user.id,
+      body.inlinequeries ? 1 : 0
     ).run();
 
     return c.json({ success: true, message: 'Bot submitted for review' });
@@ -1401,10 +1475,12 @@ app.post("/admin/submissions/:id/approve", async (c) => {
       return c.json({ error: 'This bot is already in the BotList' }, 400);
     }
 
+    const inlinequeries = (submission as BotSubmission & { inlinequeries?: number }).inlinequeries ? 1 : 0;
+
     await c.env.DB.prepare(
-      `INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, datetime('now'), datetime('now'))`
-    ).bind(name, username, description, categoryId, submission.submitted_by).run();
+      `INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, inlinequeries, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, ?, datetime('now'), datetime('now'))`
+    ).bind(name, username, description, categoryId, submission.submitted_by, inlinequeries).run();
 
     await c.env.DB.prepare(
       "UPDATE bot_submissions SET status = 'approved' WHERE id = ?"
