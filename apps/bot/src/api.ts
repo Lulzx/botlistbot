@@ -183,6 +183,15 @@ export async function postToApi<T>(endpoint: string, body: Record<string, unknow
 
 		console.log(`Response status: ${response.status}, statusText: ${response.statusText}`);
 
+		if (!response.ok) {
+			try {
+				const data = (await response.json()) as T;
+				return data;
+			} catch {
+				throw new Error(`POST ${endpoint} failed: ${response.status} ${response.statusText}`);
+			}
+		}
+
 		const data = (await response.json()) as T;
 		return data;
 	} catch (error) {
@@ -214,6 +223,15 @@ export async function deleteFromApi<T>(endpoint: string, apiBaseUrl: string, api
 		}
 
 		console.log(`Response status: ${response.status}, statusText: ${response.statusText}`);
+
+		if (!response.ok) {
+			try {
+				const data = (await response.json()) as T;
+				return data;
+			} catch {
+				throw new Error(`DELETE ${endpoint} failed: ${response.status} ${response.statusText}`);
+			}
+		}
 
 		const data = (await response.json()) as T;
 		return data;
@@ -251,6 +269,15 @@ export async function putToApi<T>(endpoint: string, body: Record<string, unknown
 		}
 
 		console.log(`Response status: ${response.status}, statusText: ${response.statusText}`);
+
+		if (!response.ok) {
+			try {
+				const data = (await response.json()) as T;
+				return data;
+			} catch {
+				throw new Error(`PUT ${endpoint} failed: ${response.status} ${response.statusText}`);
+			}
+		}
 
 		const data = (await response.json()) as T;
 		return data;

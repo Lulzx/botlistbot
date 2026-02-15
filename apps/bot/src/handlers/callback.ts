@@ -2,7 +2,7 @@ import { GrammyError, InlineKeyboard } from 'grammy';
 import { Composer } from 'grammy/web';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
 import type { MyContext } from '../types';
-import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from './../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from './../constants';
 import {
 	createCategoriesKeyboard,
 	createEmptyFavoritesKeyboard,
@@ -86,21 +86,26 @@ composer.on('callback_query:data', async (ctx) => {
 				return;
 			}
 
-			const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+			try {
+				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
 
-			if (favorites.length === 0) {
-				await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
-					parse_mode: 'HTML',
-					reply_markup: createEmptyFavoritesKeyboard(),
-				});
-			} else {
-				const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
-				await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
-					parse_mode: 'HTML',
-					reply_markup: createFavoritesKeyboard(favorites),
-				});
+				if (favorites.length === 0) {
+					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
+						parse_mode: 'HTML',
+						reply_markup: createEmptyFavoritesKeyboard(),
+					});
+				} else {
+					const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
+					await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
+						parse_mode: 'HTML',
+						reply_markup: createFavoritesKeyboard(favorites),
+					});
+				}
+				await ctx.answerCallbackQuery({ text: 'Refreshed!' });
+			} catch (error) {
+				console.error('Error refreshing favorites:', error);
+				await ctx.answerCallbackQuery({ text: 'Failed to refresh favorites' });
 			}
-			await ctx.answerCallbackQuery({ text: 'Refreshed!' });
 			return;
 		}
 
@@ -112,21 +117,26 @@ composer.on('callback_query:data', async (ctx) => {
 				return;
 			}
 
-			const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+			try {
+				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
 
-			if (favorites.length === 0) {
-				await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
-					parse_mode: 'HTML',
-					reply_markup: createEmptyFavoritesKeyboard(),
-				});
-			} else {
-				const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
-				await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
-					parse_mode: 'HTML',
-					reply_markup: createFavoritesKeyboard(favorites, page),
-				});
+				if (favorites.length === 0) {
+					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
+						parse_mode: 'HTML',
+						reply_markup: createEmptyFavoritesKeyboard(),
+					});
+				} else {
+					const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
+					await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
+						parse_mode: 'HTML',
+						reply_markup: createFavoritesKeyboard(favorites, page),
+					});
+				}
+				await ctx.answerCallbackQuery();
+			} catch (error) {
+				console.error('Error loading favorites page:', error);
+				await ctx.answerCallbackQuery({ text: 'Failed to load favorites' });
 			}
-			await ctx.answerCallbackQuery();
 			return;
 		}
 
@@ -145,54 +155,64 @@ composer.on('callback_query:data', async (ctx) => {
 				return;
 			}
 
-			const result = await deleteFromApi<ApiResponse>(`/users/${userId}/favorites/${botUsername}`, ctx.env.API_BASE_URL, ctx.env.API);
+			try {
+				const result = await deleteFromApi<ApiResponse>(`/users/${userId}/favorites/${botUsername}`, ctx.env.API_BASE_URL, ctx.env.API);
 
-			if (result.error) {
-				await ctx.answerCallbackQuery({ text: result.error });
-				return;
+				if (result.error) {
+					await ctx.answerCallbackQuery({ text: result.error });
+					return;
+				}
+
+				// Refresh the favorites list
+				const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
+
+				if (favorites.length === 0) {
+					await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
+						parse_mode: 'HTML',
+						reply_markup: createEmptyFavoritesKeyboard(),
+					});
+				} else {
+					const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
+					await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
+						parse_mode: 'HTML',
+						reply_markup: createFavoritesKeyboard(favorites),
+					});
+				}
+
+				await ctx.answerCallbackQuery({ text: MESSAGES.FAVORITES_REMOVED });
+			} catch (error) {
+				console.error('Error removing favorite:', error);
+				await ctx.answerCallbackQuery({ text: 'Failed to remove favorite' });
 			}
-
-			// Refresh the favorites list
-			const favorites = await fetchFromApi<Bot[]>(`/users/${userId}/favorites`, ctx.env.API_BASE_URL, ctx.env.API);
-
-			if (favorites.length === 0) {
-				await safeEditMessageText(ctx, MESSAGES.FAVORITES_EMPTY, {
-					parse_mode: 'HTML',
-					reply_markup: createEmptyFavoritesKeyboard(),
-				});
-			} else {
-				const botList = favorites.map((bot) => `• <b>@${bot.username}</b> - ${bot.name}`).join('\n');
-				await safeEditMessageText(ctx, `${MESSAGES.FAVORITES_INTRO}\n\n${botList}`, {
-					parse_mode: 'HTML',
-					reply_markup: createFavoritesKeyboard(favorites),
-				});
-			}
-
-			await ctx.answerCallbackQuery({ text: MESSAGES.FAVORITES_REMOVED });
 			return;
 		}
 
 		// Handle explore callbacks
 		if (data === 'explore_more') {
-			const bots = await fetchFromApi<Bot[]>('/bots/random?limit=5', ctx.env.API_BASE_URL, ctx.env.API);
+			try {
+				const bots = await fetchFromApi<Bot[]>('/bots/random?limit=5', ctx.env.API_BASE_URL, ctx.env.API);
 
-			if (bots.length === 0) {
-				await ctx.answerCallbackQuery({ text: 'No bots available' });
-				return;
+				if (bots.length === 0) {
+					await ctx.answerCallbackQuery({ text: 'No bots available' });
+					return;
+				}
+
+				const botList = bots
+					.map(
+						(bot) =>
+							`• <b>@${bot.username}</b> - ${bot.name}\n  ${bot.description?.slice(0, 100) || 'No description'}${bot.description && bot.description.length > 100 ? '...' : ''}`,
+					)
+					.join('\n\n');
+
+				await safeEditMessageText(ctx, `${MESSAGES.EXPLORE_INTRO}\n\n${botList}`, {
+					parse_mode: 'HTML',
+					reply_markup: createExploreKeyboard(bots),
+				});
+				await ctx.answerCallbackQuery();
+			} catch (error) {
+				console.error('Error loading explore bots:', error);
+				await ctx.answerCallbackQuery({ text: 'Failed to load bots' });
 			}
-
-			const botList = bots
-				.map(
-					(bot) =>
-						`• <b>@${bot.username}</b> - ${bot.name}\n  ${bot.description?.slice(0, 100) || 'No description'}${bot.description && bot.description.length > 100 ? '...' : ''}`,
-				)
-				.join('\n\n');
-
-			await safeEditMessageText(ctx, `${MESSAGES.EXPLORE_INTRO}\n\n${botList}`, {
-				parse_mode: 'HTML',
-				reply_markup: createExploreKeyboard(bots),
-			});
-			await ctx.answerCallbackQuery();
 			return;
 		}
 
@@ -307,8 +327,6 @@ composer.on('callback_query:data', async (ctx) => {
 
 		// Handle easteregg_more callback
 		if (data === 'easteregg_more') {
-			const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
 			const names: string[] = [];
 			for (let i = 0; i < 5; i++) {
 				const adj = pick(EASTER_EGG_ADJECTIVES);

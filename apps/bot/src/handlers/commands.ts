@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { Composer } from 'grammy/web';
 import { type ApiResponse, type Bot, type UserSubmissions, deleteFromApi, fetchFromApi, postToApi } from '../api';
-import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES } from '../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from '../constants';
 import {
 	createBotListKeyboard,
 	createCategoriesKeyboard,
@@ -659,8 +659,6 @@ composer.command('rate', async (ctx) => {
 
 // /easteregg command - Generate a fun bot username
 composer.command('easteregg', async (ctx) => {
-	const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
 	const names: string[] = [];
 	for (let i = 0; i < 5; i++) {
 		const adj = pick(EASTER_EGG_ADJECTIVES);

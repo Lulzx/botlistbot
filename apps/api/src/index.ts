@@ -476,6 +476,10 @@ app.get("/search", async (c) => {
     return c.json({ error: "minimum query length allowed is 3." }, 400);
   }
 
+  if ((name && name.length > 100) || (username && username.length > 100) || (description && description.length > 100)) {
+    return c.json({ error: "maximum query length allowed is 100." }, 400);
+  }
+
   if (username?.toLowerCase() === "bot") {
     return c.json({ error: "hmm... bot? be specific please!" }, 400);
   }
@@ -630,8 +634,8 @@ app.post("/bots/:id/keywords", async (c) => {
     }
 
     const keyword = body.name.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '');
-    if (!keyword || keyword.length < 2) {
-      return c.json({ error: 'Invalid keyword (min 2 chars, alphanumeric)' }, 400);
+    if (!keyword || keyword.length < 2 || keyword.length > 50) {
+      return c.json({ error: 'Invalid keyword (2-50 chars, alphanumeric)' }, 400);
     }
 
     await c.env.DB.prepare(
@@ -674,6 +678,10 @@ app.get("/keywords/search", async (c) => {
 
   if (!q || q.length < 2) {
     return c.json({ error: 'Query too short (min 2 chars)' }, 400);
+  }
+
+  if (q.length > 100) {
+    return c.json({ error: 'Query too long (max 100 chars)' }, 400);
   }
 
   try {
@@ -727,11 +735,17 @@ app.get("/users/:telegramId", async (c) => {
   }
 });
 
-// Check if user is banned
+// Check if user is banned (admin only)
 app.get("/users/:telegramId/banned", async (c) => {
   const telegramId = parseInt(c.req.param('telegramId'), 10);
+  const adminId = parseInt(c.req.query('admin_id') || '0', 10);
 
   try {
+    const admin = await getAdminUser(c.env.DB, adminId);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
     const user = await c.env.DB.prepare(
       "SELECT banned FROM users WHERE telegram_id = ?"
     ).bind(telegramId).first<{ banned: number }>();
@@ -912,9 +926,16 @@ app.get("/subscriptions/:chatId", async (c) => {
   }
 });
 
-// Get all active subscribers (for notifications)
+// Get all active subscribers (for notifications, admin only)
 app.get("/subscriptions", async (c) => {
+  const adminId = parseInt(c.req.query('admin_id') || '0', 10);
+
   try {
+    const admin = await getAdminUser(c.env.DB, adminId);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
     const { results } = await c.env.DB.prepare(
       "SELECT chat_id FROM subscriptions WHERE active = 1"
     ).all<{ chat_id: number }>();
@@ -941,6 +962,16 @@ app.post("/submissions", async (c) => {
 
   if (!body.username || !body.telegram_id) {
     return c.json({ error: 'username and telegram_id are required' }, 400);
+  }
+
+  if (body.username.length > 64) {
+    return c.json({ error: 'username must be at most 64 characters' }, 400);
+  }
+  if (body.name && body.name.length > 200) {
+    return c.json({ error: 'name must be at most 200 characters' }, 400);
+  }
+  if (body.description && body.description.length > 1000) {
+    return c.json({ error: 'description must be at most 1000 characters' }, 400);
   }
 
   try {
@@ -1128,6 +1159,10 @@ app.post("/suggestions", async (c) => {
     return c.json({ error: `Invalid action. Must be one of: ${validActions.join(', ')}` }, 400);
   }
 
+  if (body.value && body.value.length > 1000) {
+    return c.json({ error: 'value must be at most 1000 characters' }, 400);
+  }
+
   try {
     const user = await getOrCreateUser(c.env.DB, body.telegram_id);
     if (user.banned) {
@@ -1306,11 +1341,17 @@ app.post("/admin/suggestions/:id/reject", async (c) => {
   }
 });
 
-// Get pending suggestions for a bot
+// Get pending suggestions for a bot (admin only)
 app.get("/bots/:id/suggestions", async (c) => {
   const botId = parseInt(c.req.param('id'), 10);
+  const adminId = parseInt(c.req.query('admin_id') || '0', 10);
 
   try {
+    const admin = await getAdminUser(c.env.DB, adminId);
+    if (!admin) {
+      return c.json({ error: 'Unauthorized' }, 403);
+    }
+
     const { results } = await c.env.DB.prepare(`
       SELECT s.*, u.telegram_id as user_telegram_id, u.username
       FROM suggestions s
@@ -1400,20 +1441,21 @@ app.get("/admin/statistics/summary", async (c) => {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
-    const { results } = await c.env.DB.prepare(`
-      SELECT action, COUNT(*) as count
-      FROM statistics
-      GROUP BY action
-      ORDER BY count DESC
-    `).all<{ action: string; count: number }>();
-
-    const totalBots = await c.env.DB.prepare("SELECT COUNT(*) as count FROM bots").first<{ count: number }>();
-    const totalUsers = await c.env.DB.prepare("SELECT COUNT(*) as count FROM users").first<{ count: number }>();
-    const totalFavorites = await c.env.DB.prepare("SELECT COUNT(*) as count FROM favorites").first<{ count: number }>();
-    const pendingSuggestions = await c.env.DB.prepare("SELECT COUNT(*) as count FROM suggestions WHERE executed = 0").first<{ count: number }>();
+    const [actionsResult, totalBots, totalUsers, totalFavorites, pendingSuggestions] = await Promise.all([
+      c.env.DB.prepare(`
+        SELECT action, COUNT(*) as count
+        FROM statistics
+        GROUP BY action
+        ORDER BY count DESC
+      `).all<{ action: string; count: number }>(),
+      c.env.DB.prepare("SELECT COUNT(*) as count FROM bots").first<{ count: number }>(),
+      c.env.DB.prepare("SELECT COUNT(*) as count FROM users").first<{ count: number }>(),
+      c.env.DB.prepare("SELECT COUNT(*) as count FROM favorites").first<{ count: number }>(),
+      c.env.DB.prepare("SELECT COUNT(*) as count FROM suggestions WHERE executed = 0").first<{ count: number }>(),
+    ]);
 
     return c.json({
-      actions: results,
+      actions: actionsResult.results,
       totals: {
         bots: totalBots?.count ?? 0,
         users: totalUsers?.count ?? 0,
@@ -1479,18 +1521,20 @@ app.post("/bots/username/:username/rate", async (c) => {
       ON CONFLICT(user_id, bot_id) DO UPDATE SET value = excluded.value, created_at = datetime('now')
     `).bind(user.id, bot.id, value).run();
 
-    // Recalculate bot's aggregate rating
-    const agg = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt, SUM(value) as total FROM ratings WHERE bot_id = ?"
-    ).bind(bot.id).first<{ cnt: number; total: number }>();
-
+    // Atomically recalculate bot's aggregate rating from source of truth
     await c.env.DB.prepare(
-      "UPDATE bots SET rating_count = ?, rating_sum = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(agg?.cnt ?? 0, agg?.total ?? 0, bot.id).run();
+      "UPDATE bots SET rating_count = (SELECT COUNT(*) FROM ratings WHERE bot_id = ?), rating_sum = (SELECT COALESCE(SUM(value), 0) FROM ratings WHERE bot_id = ?), updated_at = datetime('now') WHERE id = ?"
+    ).bind(bot.id, bot.id, bot.id).run();
 
-    const avg = (agg?.cnt && agg?.total) ? (agg.total / agg.cnt) : 0;
+    // Read back aggregates for response
+    const updated = await c.env.DB.prepare(
+      "SELECT rating_count, rating_sum FROM bots WHERE id = ?"
+    ).bind(bot.id).first<{ rating_count: number; rating_sum: number }>();
 
-    return c.json({ success: true, message: 'Rating submitted', rating: { value, avg: Math.round(avg * 10) / 10, count: agg?.cnt ?? 0 } });
+    const count = updated?.rating_count ?? 0;
+    const avg = count > 0 ? (updated!.rating_sum / count) : 0;
+
+    return c.json({ success: true, message: 'Rating submitted', rating: { value, avg: Math.round(avg * 10) / 10, count } });
   } catch (error) {
     console.error('Database error:', error);
     return c.json({ error: 'Internal server error' }, 500);
@@ -1694,6 +1738,13 @@ app.post("/admin/bots", async (c) => {
     return c.json({ error: 'username, name, description, category_id and admin_telegram_id are required' }, 400);
   }
 
+  if (body.name.length > 200) {
+    return c.json({ error: 'name must be at most 200 characters' }, 400);
+  }
+  if (body.description.length > 1000) {
+    return c.json({ error: 'description must be at most 1000 characters' }, 400);
+  }
+
   try {
     const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
     if (!admin) {
@@ -1849,12 +1900,8 @@ app.post("/admin/ban", async (c) => {
   }
 
   try {
-    // Verify admin
-    const admin = await c.env.DB.prepare(
-      "SELECT is_admin FROM users WHERE telegram_id = ?"
-    ).bind(body.admin_telegram_id).first<{ is_admin: number }>();
-
-    if (!admin || !admin.is_admin) {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
@@ -1889,12 +1936,8 @@ app.post("/admin/unban", async (c) => {
   }
 
   try {
-    // Verify admin
-    const admin = await c.env.DB.prepare(
-      "SELECT is_admin FROM users WHERE telegram_id = ?"
-    ).bind(body.admin_telegram_id).first<{ is_admin: number }>();
-
-    if (!admin || !admin.is_admin) {
+    const admin = await getAdminUser(c.env.DB, body.admin_telegram_id);
+    if (!admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
@@ -1914,23 +1957,19 @@ app.post("/admin/unban", async (c) => {
 });
 
 // Get user info for admin
-app.get("/admin/userinfo/:userId", async (c) => {
-  const userId = parseInt(c.req.param('userId'), 10);
+app.get("/admin/userinfo/:telegramId", async (c) => {
+  const telegramId = parseInt(c.req.param('telegramId'), 10);
   const adminId = parseInt(c.req.query('admin_id') || '0', 10);
 
   try {
-    // Verify admin
-    const admin = await c.env.DB.prepare(
-      "SELECT is_admin FROM users WHERE telegram_id = ?"
-    ).bind(adminId).first<{ is_admin: number }>();
-
-    if (!admin || !admin.is_admin) {
+    const admin = await getAdminUser(c.env.DB, adminId);
+    if (!admin) {
       return c.json({ error: 'Unauthorized' }, 403);
     }
 
     const user = await c.env.DB.prepare(
       "SELECT * FROM users WHERE telegram_id = ?"
-    ).bind(userId).first<User>();
+    ).bind(telegramId).first<User>();
 
     if (!user) {
       return c.json({ error: 'User not found' }, 404);

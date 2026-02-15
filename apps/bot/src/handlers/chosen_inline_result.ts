@@ -13,7 +13,7 @@ composer.on('chosen_inline_result', async (ctx) => {
 		const result_id: string = chosenInlineResult.result_id;
 
 		if (result_id.startsWith('CAT ')) {
-			const [prefix, offset, count, categoryId] = result_id.split(' ');
+			const [, , , categoryId] = result_id.split(' ');
 
 			if (!categoryId || Number.isNaN(Number(categoryId))) {
 				console.error(`Invalid category ID in result_id: ${result_id}`);

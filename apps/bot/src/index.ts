@@ -67,12 +67,4 @@ app.get('/', (c) => {
 	);
 });
 
-app.get('/debug', (c) => {
-	return c.json({
-		message: 'Debug info (no sensitive data)',
-		hasToken: !!c.env.BOT_TOKEN,
-		apiUrl: c.env.API_BASE_URL,
-	});
-});
-
 export default app;

@@ -334,3 +334,5 @@ export const EASTER_EGG_NOUNS = [
 ];
 
 export const EASTER_EGG_ENDINGS = ['Bot', 'Bot', 'Bot', '_bot', 'Helper', 'Buddy', 'Pal', 'Assistant'];
+
+export const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];

@@ -10,10 +10,7 @@ export const composer = new Composer<MyContext>();
 
 export default composer;
 
-// Pending broadcast messages (keyed by admin user id)
-const pendingBroadcasts = new Map<number, string>();
-
-// /broadcast command
+// /broadcast command — requires text inline with the command
 composer.command('broadcast', async (ctx) => {
 	const adminId = ctx.from?.id;
 	if (!adminId || !isAdminId(adminId, ctx.env)) {
@@ -24,47 +21,18 @@ composer.command('broadcast', async (ctx) => {
 	const text = ctx.match?.trim();
 
 	if (!text) {
-		await ctx.reply(MESSAGES.BROADCAST_PROMPT, { parse_mode: 'HTML' });
-		// Set a flag so the next text message from this admin is treated as broadcast text
-		pendingBroadcasts.set(adminId, '__awaiting__');
+		await ctx.reply('📢 <b>Broadcast</b>\n\nUsage: <code>/broadcast Your message here</code>', { parse_mode: 'HTML' });
 		return;
 	}
 
-	// Show preview
-	pendingBroadcasts.set(adminId, text);
+	// Show preview with confirm/cancel buttons
 	await ctx.reply(MESSAGES.BROADCAST_CONFIRM.replace('{text}', text), {
 		parse_mode: 'HTML',
 		reply_markup: createConfirmKeyboard('broadcast_confirm', 'broadcast_cancel'),
 	});
 });
 
-// Handle text input for broadcast (when admin sent /broadcast without text)
-composer.on('message:text', async (ctx, next) => {
-	const adminId = ctx.from?.id;
-	if (!adminId || !isAdminId(adminId, ctx.env)) {
-		return next();
-	}
-
-	const pending = pendingBroadcasts.get(adminId);
-	if (pending !== '__awaiting__') {
-		return next();
-	}
-
-	const text = ctx.message.text;
-	if (text.startsWith('/')) {
-		// User sent another command, cancel
-		pendingBroadcasts.delete(adminId);
-		return next();
-	}
-
-	pendingBroadcasts.set(adminId, text);
-	await ctx.reply(MESSAGES.BROADCAST_CONFIRM.replace('{text}', text), {
-		parse_mode: 'HTML',
-		reply_markup: createConfirmKeyboard('broadcast_confirm', 'broadcast_cancel'),
-	});
-});
-
-// Confirm broadcast callback
+// Confirm broadcast callback — extract text from the preview message
 composer.callbackQuery('broadcast_confirm', async (ctx) => {
 	const adminId = ctx.from?.id;
 	if (!adminId || !isAdminId(adminId, ctx.env)) {
@@ -72,17 +40,35 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 		return;
 	}
 
-	const text = pendingBroadcasts.get(adminId);
-	if (!text || text === '__awaiting__') {
+	// Extract broadcast text from the preview message
+	// Preview format: "📢 Preview:\n\n{text}\n\nSend to all subscribers?"
+	const messageText = ctx.callbackQuery.message?.text;
+	if (!messageText) {
+		await ctx.answerCallbackQuery({ text: 'Could not retrieve broadcast text' });
+		return;
+	}
+
+	// Parse text between "📢 Preview:\n\n" and "\n\nSend to all subscribers?"
+	const prefix = '📢 Preview:\n\n';
+	const suffix = '\n\nSend to all subscribers?';
+	const startIdx = messageText.indexOf(prefix);
+	const endIdx = messageText.lastIndexOf(suffix);
+
+	if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+		await ctx.answerCallbackQuery({ text: 'Could not parse broadcast text' });
+		return;
+	}
+
+	const text = messageText.slice(startIdx + prefix.length, endIdx);
+	if (!text) {
 		await ctx.answerCallbackQuery({ text: 'No message to broadcast' });
 		return;
 	}
 
-	pendingBroadcasts.delete(adminId);
 	await ctx.answerCallbackQuery({ text: 'Broadcasting...' });
 
 	try {
-		const subscribers = await fetchFromApi<Array<{ chat_id: number }>>('/subscriptions', ctx.env.API_BASE_URL, ctx.env.API);
+		const subscribers = await fetchFromApi<Array<{ chat_id: number }>>(`/subscriptions?admin_id=${adminId}`, ctx.env.API_BASE_URL, ctx.env.API);
 
 		let sentCount = 0;
 		for (const sub of subscribers) {
@@ -107,10 +93,6 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 
 // Cancel broadcast callback
 composer.callbackQuery('broadcast_cancel', async (ctx) => {
-	const adminId = ctx.from?.id;
-	if (adminId) {
-		pendingBroadcasts.delete(adminId);
-	}
 	await ctx.answerCallbackQuery({ text: 'Cancelled' });
 	await ctx.editMessageText(MESSAGES.BROADCAST_CANCELLED);
 });
