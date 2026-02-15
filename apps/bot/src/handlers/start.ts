@@ -70,7 +70,11 @@ composer.command('start', async (ctx) => {
 	}
 
 	trackActivity(ctx, 'start');
-	await ctx.replyWithSticker('CAACAgQAAxkBAegKiGfsqmYos2uzFJ8o4d5gMp88qHnMAALIDQACiTNpUgwAAfZ1jylUEjYE');
+	try {
+		await ctx.replyWithSticker('CAACAgQAAxkBAegKiGfsqmYos2uzFJ8o4d5gMp88qHnMAALIDQACiTNpUgwAAfZ1jylUEjYE');
+	} catch (err) {
+		console.error('Failed to send sticker:', err);
+	}
 	await ctx.reply(MESSAGES.WELCOME, {
 		parse_mode: 'HTML',
 		reply_markup: createMainKeyboard(),

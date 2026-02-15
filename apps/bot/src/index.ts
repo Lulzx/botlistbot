@@ -40,6 +40,11 @@ app.post('/:token', async (c) => {
 
 		bot.use(composer);
 
+		bot.catch((err) => {
+			console.error('Grammy error:', err.message);
+			console.error('Update that caused error:', JSON.stringify(err.ctx?.update));
+		});
+
 		try {
 			console.log('Processing webhook with grammy...');
 			const callback = webhookCallback(bot, 'hono');
