@@ -140,9 +140,12 @@ export async function fetchFromApi<T>(endpoint: string, apiBaseUrl: string, apiS
 		console.log(`Response status: ${response.status}, statusText: ${response.statusText}`);
 
 		if (!response.ok) {
-			const errorText = await response.text();
-			console.error(`API Error (${response.status}): ${errorText}`);
-			throw new Error(`Failed to fetch ${endpoint}: ${response.statusText}`);
+			try {
+				const data = (await response.json()) as T;
+				return data;
+			} catch {
+				throw new Error(`Failed to fetch ${endpoint}: ${response.status} ${response.statusText}`);
+			}
 		}
 
 		const data = (await response.json()) as T;

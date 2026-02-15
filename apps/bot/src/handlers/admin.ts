@@ -93,11 +93,15 @@ const buildSubmissionsKeyboard = (submissions: BotSubmission[]) => {
 
 const renderPendingSubmissions = async (ctx: MyContext, adminId: number, preferEdit = false) => {
 	try {
-		const submissions = await fetchFromApi<BotSubmission[]>(
+		const submissions = await fetchFromApi<BotSubmission[] | { error: string }>(
 			`/admin/submissions/pending?admin_id=${adminId}&limit=${PENDING_LIMIT}`,
 			ctx.env.API_BASE_URL,
 			ctx.env.API,
 		);
+
+		if (!Array.isArray(submissions)) {
+			throw new Error(submissions.error || 'Failed to load submissions');
+		}
 
 		const hasPending = submissions.length > 0;
 		const keyboard = hasPending ? buildSubmissionsKeyboard(submissions) : createAdminKeyboard();
@@ -121,6 +125,7 @@ const renderPendingSubmissions = async (ctx: MyContext, adminId: number, preferE
 					reply_markup: keyboard,
 				});
 			}
+			await ctx.answerCallbackQuery();
 		} else {
 			await ctx.reply(listText, {
 				parse_mode: 'HTML',
@@ -276,10 +281,17 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 	}
 
 	const replyWithPanel = async (text: string) => {
-		await ctx.reply(text, {
-			parse_mode: 'HTML',
-			reply_markup: createAdminKeyboard(),
-		});
+		try {
+			await ctx.editMessageText(text, {
+				parse_mode: 'HTML',
+				reply_markup: createAdminKeyboard(),
+			});
+		} catch {
+			await ctx.reply(text, {
+				parse_mode: 'HTML',
+				reply_markup: createAdminKeyboard(),
+			});
+		}
 	};
 
 	switch (action) {
@@ -307,11 +319,9 @@ composer.callbackQuery(/^admin:(.+)$/, async (ctx) => {
 			break;
 		case 'review':
 			await renderPendingSubmissions(ctx, adminId, true);
-			await ctx.answerCallbackQuery();
 			return;
 		case 'suggestions':
 			await renderPendingSuggestions(ctx, adminId, true);
-			await ctx.answerCallbackQuery();
 			return;
 		case 'stats': {
 			try {
@@ -857,11 +867,15 @@ const SUGGESTION_LIMIT = 5;
 
 const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferEdit = false) => {
 	try {
-		const suggestions = await fetchFromApi<Suggestion[]>(
+		const suggestions = await fetchFromApi<Suggestion[] | { error: string }>(
 			`/admin/suggestions/pending?admin_id=${adminId}&limit=${SUGGESTION_LIMIT}`,
 			ctx.env.API_BASE_URL,
 			ctx.env.API,
 		);
+
+		if (!Array.isArray(suggestions)) {
+			throw new Error(suggestions.error || 'Failed to load suggestions');
+		}
 
 		const hasPending = suggestions.length > 0;
 
@@ -873,6 +887,7 @@ const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferE
 				} catch {
 					await ctx.reply(text, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
 				}
+				await ctx.answerCallbackQuery();
 			} else {
 				await ctx.reply(text, { parse_mode: 'HTML', reply_markup: createAdminKeyboard() });
 			}
@@ -904,6 +919,7 @@ const renderPendingSuggestions = async (ctx: MyContext, adminId: number, preferE
 			} catch {
 				await ctx.reply(fullText, { parse_mode: 'HTML', reply_markup: keyboard });
 			}
+			await ctx.answerCallbackQuery();
 		} else {
 			await ctx.reply(fullText, { parse_mode: 'HTML', reply_markup: keyboard });
 		}

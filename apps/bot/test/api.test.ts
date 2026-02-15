@@ -413,7 +413,7 @@ describe('API Helper Functions', () => {
 			const { fetchFromApi } = await import('../src/api');
 
 			await expect(fetchFromApi('/test', 'https://api.example.com', mockApiService)).rejects.toThrow(
-				'Failed to fetch /test: Service Unavailable',
+				'Failed to fetch /test: 503 Service Unavailable',
 			);
 			expect(mockApiService.fetch).toHaveBeenCalledTimes(1);
 			expect(global.fetch).not.toHaveBeenCalled();
