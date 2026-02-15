@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isAdminId } from '../src/config';
 import { MESSAGES, CATEGORIES, CATEGORY_NAMES } from '../src/constants';
-
-const mockEnv = { ADMIN_IDS: '691609650,62056065' };
+import { mockEnv } from './fixtures';
 
 // Test admin configuration for handlers
 describe('Admin Handler Logic', () => {
@@ -10,6 +9,7 @@ describe('Admin Handler Logic', () => {
 		it('should recognize configured admin IDs', () => {
 			expect(isAdminId(691609650, mockEnv)).toBe(true);
 			expect(isAdminId(62056065, mockEnv)).toBe(true);
+			expect(isAdminId(140294235, mockEnv)).toBe(true);
 		});
 
 		it('should reject non-admin IDs', () => {

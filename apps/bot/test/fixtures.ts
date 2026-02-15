@@ -1,0 +1,3 @@
+export const TEST_ADMIN_IDS = '691609650,62056065,140294235';
+
+export const mockEnv = { ADMIN_IDS: TEST_ADMIN_IDS };

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getAdminIds, isAdminId } from '../src/config';
-
-const mockEnv = { ADMIN_IDS: '691609650,62056065' };
+import { mockEnv } from './fixtures';
 
 describe('config', () => {
 	describe('getAdminIds', () => {
@@ -9,6 +8,7 @@ describe('config', () => {
 			const ids = getAdminIds(mockEnv);
 			expect(ids).toContain(691609650);
 			expect(ids).toContain(62056065);
+			expect(ids).toContain(140294235);
 		});
 
 		it('should return an array of numbers', () => {
@@ -34,6 +34,7 @@ describe('config', () => {
 		it('should return true for valid admin IDs', () => {
 			expect(isAdminId(691609650, mockEnv)).toBe(true);
 			expect(isAdminId(62056065, mockEnv)).toBe(true);
+			expect(isAdminId(140294235, mockEnv)).toBe(true);
 		});
 
 		it('should return false for non-admin IDs', () => {
