@@ -14,12 +14,14 @@ export async function createSuggestion(
 		return { error: `Invalid action. Must be one of: ${validActions.join(', ')}` };
 	}
 
+	if (value && value.length > 1000) return { error: 'Value is too long (max 1000 chars)' };
+
 	const user = await getOrCreateUser(db, telegramId);
 	if (user.banned) return { error: 'You are banned' };
 
 	const bot = await db
 		.prepare('SELECT id FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(botUsername.replace('@', ''))
+		.bind(botUsername.replace(/^@+/, ''))
 		.first<{ id: number }>();
 
 	if (!bot) return { error: 'Bot not found' };
@@ -67,71 +69,87 @@ export async function acceptSuggestion(db: D1Database, suggestionId: number, adm
 	if (!suggestion) return { error: 'Suggestion not found' };
 	if (suggestion.executed !== 0) return { error: 'Suggestion already processed' };
 
+	const markExecuted = db.prepare('UPDATE suggestions SET executed = 1 WHERE id = ?').bind(suggestionId);
+
 	switch (suggestion.action) {
 		case 'name':
 			if (suggestion.value) {
-				await db
-					.prepare("UPDATE bots SET name = ?, updated_at = datetime('now') WHERE id = ?")
-					.bind(suggestion.value, suggestion.bot_id)
-					.run();
+				await db.batch([
+					db.prepare("UPDATE bots SET name = ?, updated_at = datetime('now') WHERE id = ?").bind(suggestion.value, suggestion.bot_id),
+					markExecuted,
+				]);
+			} else {
+				await markExecuted.run();
 			}
 			break;
 		case 'description':
 			if (suggestion.value) {
-				await db
-					.prepare("UPDATE bots SET description = ?, updated_at = datetime('now') WHERE id = ?")
-					.bind(suggestion.value, suggestion.bot_id)
-					.run();
+				await db.batch([
+					db.prepare("UPDATE bots SET description = ?, updated_at = datetime('now') WHERE id = ?").bind(suggestion.value, suggestion.bot_id),
+					markExecuted,
+				]);
+			} else {
+				await markExecuted.run();
 			}
 			break;
 		case 'category':
 			if (suggestion.value) {
 				const catId = parseInt(suggestion.value, 10);
 				if (!isNaN(catId) && CATEGORIES.some((cat) => cat.id === catId)) {
-					await db
-						.prepare("UPDATE bots SET category_id = ?, updated_at = datetime('now') WHERE id = ?")
-						.bind(catId, suggestion.bot_id)
-						.run();
+					await db.batch([
+						db.prepare("UPDATE bots SET category_id = ?, updated_at = datetime('now') WHERE id = ?").bind(catId, suggestion.bot_id),
+						markExecuted,
+					]);
+				} else {
+					await markExecuted.run();
 				}
+			} else {
+				await markExecuted.run();
 			}
 			break;
 		case 'offline':
-			await db
-				.prepare("UPDATE bots SET offline = 1, updated_at = datetime('now') WHERE id = ?")
-				.bind(suggestion.bot_id)
-				.run();
+			await db.batch([
+				db.prepare("UPDATE bots SET offline = 1, updated_at = datetime('now') WHERE id = ?").bind(suggestion.bot_id),
+				markExecuted,
+			]);
 			break;
 		case 'spam':
-			await db
-				.prepare("UPDATE bots SET spam = 1, updated_at = datetime('now') WHERE id = ?")
-				.bind(suggestion.bot_id)
-				.run();
+			await db.batch([
+				db.prepare("UPDATE bots SET spam = 1, updated_at = datetime('now') WHERE id = ?").bind(suggestion.bot_id),
+				markExecuted,
+			]);
 			break;
 		case 'inlinequeries':
-			await db
-				.prepare("UPDATE bots SET inlinequeries = 1, updated_at = datetime('now') WHERE id = ?")
-				.bind(suggestion.bot_id)
-				.run();
+			await db.batch([
+				db.prepare("UPDATE bots SET inlinequeries = 1, updated_at = datetime('now') WHERE id = ?").bind(suggestion.bot_id),
+				markExecuted,
+			]);
 			break;
 		case 'add_keyword':
 			if (suggestion.value) {
-				await db
-					.prepare("INSERT OR IGNORE INTO keywords (name, bot_id, created_at) VALUES (?, ?, datetime('now'))")
-					.bind(suggestion.value.toLowerCase(), suggestion.bot_id)
-					.run();
+				await db.batch([
+					db.prepare("INSERT OR IGNORE INTO keywords (name, bot_id, created_at) VALUES (?, ?, datetime('now'))").bind(suggestion.value.toLowerCase(), suggestion.bot_id),
+					markExecuted,
+				]);
+			} else {
+				await markExecuted.run();
 			}
 			break;
 		case 'remove_keyword':
 			if (suggestion.value) {
-				await db
-					.prepare('DELETE FROM keywords WHERE name = ? AND bot_id = ?')
-					.bind(suggestion.value.toLowerCase(), suggestion.bot_id)
-					.run();
+				await db.batch([
+					db.prepare('DELETE FROM keywords WHERE name = ? AND bot_id = ?').bind(suggestion.value.toLowerCase(), suggestion.bot_id),
+					markExecuted,
+				]);
+			} else {
+				await markExecuted.run();
 			}
+			break;
+		default:
+			await markExecuted.run();
 			break;
 	}
 
-	await db.prepare('UPDATE suggestions SET executed = 1 WHERE id = ?').bind(suggestionId).run();
 	return { success: true, message: 'Suggestion accepted and applied' };
 }
 

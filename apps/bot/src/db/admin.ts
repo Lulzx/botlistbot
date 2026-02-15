@@ -61,24 +61,25 @@ export async function approveSubmission(
 
 	if (existingBot) return { error: 'This bot is already in the BotList' };
 
-	const inlinequeries = (submission as BotSubmission & { inlinequeries?: number }).inlinequeries ? 1 : 0;
+	const inlinequeries = submission.inlinequeries ? 1 : 0;
 
-	await db
-		.prepare(
-			`INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, inlinequeries, created_at, updated_at)
+	await db.batch([
+		db
+			.prepare(
+				`INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, inlinequeries, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, ?, datetime('now'), datetime('now'))`,
-		)
-		.bind(name, username, description, categoryId, submission.submitted_by, inlinequeries)
-		.run();
-
-	await db.prepare("UPDATE bot_submissions SET status = 'approved' WHERE id = ?").bind(submissionId).run();
+			)
+			.bind(name, username, description, categoryId, submission.submitted_by, inlinequeries),
+		db.prepare("UPDATE bot_submissions SET status = 'approved' WHERE id = ?").bind(submissionId),
+	]);
 
 	const bot = await db
 		.prepare('SELECT * FROM bots WHERE LOWER(username) = LOWER(?)')
 		.bind(username)
 		.first<Bot>();
 
-	return bot!;
+	if (!bot) return { error: 'Failed to create bot' };
+	return bot;
 }
 
 export async function rejectSubmission(
@@ -111,6 +112,8 @@ export async function addBot(
 
 	const username = sanitizeUsername(opts.username);
 	if (!username) return { error: 'Invalid username' };
+	if (opts.name.length > 200) return { error: 'Name is too long (max 200 chars)' };
+	if (opts.description.length > 1000) return { error: 'Description is too long (max 1000 chars)' };
 
 	if (!CATEGORIES.some((cat) => cat.id === opts.category_id)) {
 		return { error: 'Invalid category_id' };
@@ -138,7 +141,8 @@ export async function addBot(
 		.bind(username)
 		.first<Bot>();
 
-	return bot!;
+	if (!bot) return { error: 'Failed to create bot' };
+	return bot;
 }
 
 export async function updateBot(
@@ -222,7 +226,8 @@ export async function updateBot(
 	await db.prepare(`UPDATE bots SET ${setClauses.join(', ')} WHERE id = ?`).bind(...params).run();
 
 	const updatedBot = await db.prepare('SELECT * FROM bots WHERE id = ?').bind(bot.id).first<Bot>();
-	return updatedBot!;
+	if (!updatedBot) return { error: 'Failed to update bot' };
+	return updatedBot;
 }
 
 export async function banUser(db: D1Database, userId: number, adminTelegramId: number): Promise<ApiResponse> {

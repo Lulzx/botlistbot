@@ -66,7 +66,7 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 	await ctx.answerCallbackQuery({ text: 'Broadcasting...' });
 
 	try {
-		const subscribers = await getAllActiveSubscribers(ctx.env.DB);
+		const subscribers = await getAllActiveSubscribers(ctx.env.DB, adminId);
 
 		let sentCount = 0;
 		for (const sub of subscribers) {

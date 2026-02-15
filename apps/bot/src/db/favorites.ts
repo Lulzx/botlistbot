@@ -19,7 +19,7 @@ export async function addFavorite(db: D1Database, telegramId: number, botUsernam
 	const user = await getOrCreateUser(db, telegramId);
 	const bot = await db
 		.prepare('SELECT id FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(botUsername.replace('@', ''))
+		.bind(botUsername.replace(/^@+/, ''))
 		.first<{ id: number }>();
 
 	if (!bot) return { error: 'Bot not found in the database' };
@@ -49,7 +49,7 @@ export async function removeFavorite(db: D1Database, telegramId: number, botUser
 
 	const bot = await db
 		.prepare('SELECT id FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(botUsername.replace('@', ''))
+		.bind(botUsername.replace(/^@+/, ''))
 		.first<{ id: number }>();
 
 	if (!bot) return { error: 'Bot not found' };

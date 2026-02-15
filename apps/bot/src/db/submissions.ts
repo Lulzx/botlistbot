@@ -12,20 +12,24 @@ export async function submitBot(
 		inlinequeries?: number;
 	},
 ): Promise<ApiResponse> {
+	if (opts.username.length > 64) return { error: 'Username is too long (max 64 chars)' };
+	if (opts.name && opts.name.length > 200) return { error: 'Name is too long (max 200 chars)' };
+	if (opts.description && opts.description.length > 1000) return { error: 'Description is too long (max 1000 chars)' };
+
 	const user = await getOrCreateUser(db, opts.telegram_id);
 
 	if (user.banned) return { error: 'You are banned from submitting bots' };
 
 	const existingBot = await db
 		.prepare('SELECT id FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(opts.username.replace('@', ''))
+		.bind(opts.username.replace(/^@+/, ''))
 		.first();
 
 	if (existingBot) return { error: 'This bot is already in the BotList' };
 
 	const existingSubmission = await db
 		.prepare("SELECT id FROM bot_submissions WHERE LOWER(username) = LOWER(?) AND status = 'pending'")
-		.bind(opts.username.replace('@', ''))
+		.bind(opts.username.replace(/^@+/, ''))
 		.first();
 
 	if (existingSubmission) return { error: 'This bot has already been submitted and is pending review' };
@@ -36,7 +40,7 @@ export async function submitBot(
       VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`,
 		)
 		.bind(
-			opts.username.replace('@', ''),
+			opts.username.replace(/^@+/, ''),
 			opts.name || opts.username,
 			opts.description || '',
 			opts.category_id || 1,

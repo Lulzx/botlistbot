@@ -1,5 +1,5 @@
 import type { ApiResponse } from './types';
-import { getOrCreateUser } from './users';
+import { getAdminUser, getOrCreateUser } from './users';
 
 export async function subscribe(db: D1Database, chatId: number, telegramId: number): Promise<ApiResponse> {
 	const user = await getOrCreateUser(db, telegramId);
@@ -30,7 +30,13 @@ export async function unsubscribe(db: D1Database, chatId: number): Promise<ApiRe
 	return { success: true, message: 'Unsubscribed from updates' };
 }
 
-export async function getAllActiveSubscribers(db: D1Database): Promise<Array<{ chat_id: number }>> {
+export async function getAllActiveSubscribers(
+	db: D1Database,
+	adminTelegramId: number,
+): Promise<Array<{ chat_id: number }>> {
+	const admin = await getAdminUser(db, adminTelegramId);
+	if (!admin) return [];
+
 	const { results } = await db
 		.prepare('SELECT chat_id FROM subscriptions WHERE active = 1')
 		.all<{ chat_id: number }>();

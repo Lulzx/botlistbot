@@ -661,8 +661,8 @@ composer.command('userinfo', async (ctx) => {
 		message += `<b>Telegram ID:</b> <code>${user.telegram_id}</code>\n`;
 		message += `<b>Username:</b> ${user.username ? `@${user.username}` : 'Not set'}\n`;
 		message += `<b>First Name:</b> ${user.first_name || 'Not set'}\n`;
-		message += `<b>Status:</b> ${user.banned ? 'Banned' : 'Active'}\n`;
-		message += `<b>Admin:</b> ${user.is_admin ? 'Yes' : 'No'}\n`;
+		message += `<b>Status:</b> ${user.banned === 1 ? 'Banned' : 'Active'}\n`;
+		message += `<b>Admin:</b> ${user.is_admin === 1 ? 'Yes' : 'No'}\n`;
 		message += `<b>Joined:</b> ${user.created_at}\n\n`;
 
 		message += `<b>Submitted Bots (${submitted_bots.length}):</b>\n`;

@@ -13,7 +13,7 @@ export async function reportSpam(
 
 	const bot = await db
 		.prepare('SELECT id FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(botUsername.replace('@', ''))
+		.bind(botUsername.replace(/^@+/, ''))
 		.first<{ id: number }>();
 
 	if (!bot) return { error: 'Bot not found in the database' };
@@ -40,7 +40,7 @@ export async function reportOffline(db: D1Database, botUsername: string, telegra
 
 	const bot = await db
 		.prepare('SELECT id, offline FROM bots WHERE LOWER(username) = LOWER(?)')
-		.bind(botUsername.replace('@', ''))
+		.bind(botUsername.replace(/^@+/, ''))
 		.first<{ id: number; offline: number }>();
 
 	if (!bot) return { error: 'Bot not found in the database' };

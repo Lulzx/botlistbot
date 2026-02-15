@@ -23,8 +23,8 @@ export interface User {
 	telegram_id: number;
 	username?: string;
 	first_name?: string;
-	banned: boolean;
-	is_admin: boolean;
+	banned: number;
+	is_admin: number;
 	created_at: string;
 }
 
@@ -75,17 +75,6 @@ export interface Keyword {
 	created_at: string;
 }
 
-export interface StatisticEntry {
-	id: number;
-	user_id?: number;
-	action: string;
-	entity?: string;
-	level: number;
-	created_at: string;
-	user_telegram_id?: number;
-	username?: string;
-}
-
 export interface StatisticsSummary {
 	actions: Array<{ action: string; count: number }>;
 	totals: {
@@ -96,22 +85,9 @@ export interface StatisticsSummary {
 	};
 }
 
-export interface Country {
-	id: number;
-	name: string;
-	emoji: string;
-}
-
 export interface ApiResponse {
 	success?: boolean;
 	message?: string;
 	error?: string;
 }
 
-export interface Subscription {
-	id: number;
-	chat_id: number;
-	user_id: number;
-	active: number;
-	created_at: string;
-}

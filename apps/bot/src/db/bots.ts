@@ -1,12 +1,14 @@
 import type { Bot } from './types';
 
+const MAX_QUERY_LENGTH = 100;
+
 export async function searchBots(
 	db: D1Database,
 	opts: { name?: string; username?: string; description?: string },
 ): Promise<Bot[]> {
-	const name = opts.name?.trim();
-	const username = opts.username ? opts.username.replace(/^@+/, '').trim() : undefined;
-	const description = opts.description?.trim();
+	const name = opts.name?.trim().slice(0, MAX_QUERY_LENGTH);
+	const username = opts.username ? opts.username.replace(/^@+/, '').trim().slice(0, MAX_QUERY_LENGTH) : undefined;
+	const description = opts.description?.trim().slice(0, MAX_QUERY_LENGTH);
 
 	if (!name && !username && !description) return [];
 
@@ -31,6 +33,8 @@ export async function searchBots(
 		conditions.push('EXISTS (SELECT 1 FROM keywords k WHERE k.bot_id = b.id AND LOWER(k.name) LIKE LOWER(?))');
 		params.push(`%${anyTerm}%`);
 	}
+
+	if (conditions.length === 0) return [];
 
 	const query = `SELECT DISTINCT b.* FROM bots b WHERE ${conditions.map((c) => `(${c})`).join(' OR ')}`;
 	const { results } = await db.prepare(query).bind(...params).all<Bot>();
@@ -64,7 +68,7 @@ export async function getBestBots(db: D1Database, limit = 10): Promise<Bot[]> {
 }
 
 export async function getBotByUsername(db: D1Database, username: string): Promise<Bot | null> {
-	const clean = username.replace('@', '');
+	const clean = username.replace(/^@+/, '');
 	return db.prepare('SELECT * FROM bots WHERE LOWER(username) = LOWER(?)').bind(clean).first<Bot>();
 }
 
