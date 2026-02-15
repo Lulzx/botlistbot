@@ -197,7 +197,3 @@ cd apps/bot && bun run webhook
 - **BotList Channel Transmission** — Publishing the full categorized bot list to the @BotList Telegram channel (old: `components/botlist.py`). This was a major feature that generates and sends category-organized messages to a public channel.
 - **Bot Checker Worker** — Background worker that pings bots to check if they're online/offline (old: `botcheckerworker/`).
 - **Forward/Reply Routing** — Handle forwarded bot messages and replies to detect @usernames and auto-lookup (old: `routing.py`).
-### Known Issues
-
-- **Categories duplication** — ~~Hardcoded in both `apps/api` and `apps/bot`~~ Fixed: now shared via `@botlistbot/shared` package.
-- **Ratings** — ~~`rating_count`/`rating_sum` were never written to~~ Fixed: full rating system with `/rate` command, API endpoints, and aggregate recalculation.

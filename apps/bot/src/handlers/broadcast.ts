@@ -16,7 +16,7 @@ const pendingBroadcasts = new Map<number, string>();
 // /broadcast command
 composer.command('broadcast', async (ctx) => {
 	const adminId = ctx.from?.id;
-	if (!adminId || !isAdminId(adminId)) {
+	if (!adminId || !isAdminId(adminId, ctx.env)) {
 		await ctx.reply(MESSAGES.ADMIN_UNAUTHORIZED);
 		return;
 	}
@@ -41,7 +41,7 @@ composer.command('broadcast', async (ctx) => {
 // Handle text input for broadcast (when admin sent /broadcast without text)
 composer.on('message:text', async (ctx, next) => {
 	const adminId = ctx.from?.id;
-	if (!adminId || !isAdminId(adminId)) {
+	if (!adminId || !isAdminId(adminId, ctx.env)) {
 		return next();
 	}
 
@@ -67,7 +67,7 @@ composer.on('message:text', async (ctx, next) => {
 // Confirm broadcast callback
 composer.callbackQuery('broadcast_confirm', async (ctx) => {
 	const adminId = ctx.from?.id;
-	if (!adminId || !isAdminId(adminId)) {
+	if (!adminId || !isAdminId(adminId, ctx.env)) {
 		await ctx.answerCallbackQuery({ text: 'Unauthorized' });
 		return;
 	}

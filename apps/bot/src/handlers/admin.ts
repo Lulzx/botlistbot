@@ -29,8 +29,8 @@ async function isAdmin(ctx: MyContext): Promise<boolean> {
 	const userId = ctx.from?.id;
 	if (!userId) return false;
 
-	// Check config first (hardcoded admins)
-	if (isAdminId(userId)) {
+	// Check config first (env-based admins)
+	if (isAdminId(userId, ctx.env)) {
 		return true;
 	}
 

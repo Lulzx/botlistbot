@@ -2,18 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { isAdminId } from '../src/config';
 import { MESSAGES, CATEGORIES, CATEGORY_NAMES } from '../src/constants';
 
+const mockEnv = { ADMIN_IDS: '691609650,62056065' };
+
 // Test admin configuration for handlers
 describe('Admin Handler Logic', () => {
 	describe('Admin ID validation', () => {
 		it('should recognize configured admin IDs', () => {
-			// The admin IDs configured in config.ts
-			expect(isAdminId(691609650)).toBe(true);
-			expect(isAdminId(62056065)).toBe(true);
+			expect(isAdminId(691609650, mockEnv)).toBe(true);
+			expect(isAdminId(62056065, mockEnv)).toBe(true);
 		});
 
 		it('should reject non-admin IDs', () => {
-			expect(isAdminId(123456789)).toBe(false);
-			expect(isAdminId(999999999)).toBe(false);
+			expect(isAdminId(123456789, mockEnv)).toBe(false);
+			expect(isAdminId(999999999, mockEnv)).toBe(false);
 		});
 	});
 });

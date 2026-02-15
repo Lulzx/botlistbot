@@ -114,9 +114,7 @@ const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_suggestions_pending ON suggestions(executed) WHERE executed = 0`,
   `CREATE INDEX IF NOT EXISTS idx_statistics_date ON statistics(created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_statistics_action ON statistics(action)`,
-  `INSERT OR IGNORE INTO users (telegram_id, username, banned, is_admin, created_at) VALUES
-    (691609650, NULL, 0, 1, datetime('now')),
-    (62056065, NULL, 0, 1, datetime('now'))`,
+  // Admin users are seeded dynamically from ADMIN_IDS env var in ensureDatabase
   `INSERT OR IGNORE INTO bots (name, username, description, category_id) VALUES
     ('Bot Store Bot', 'storebot', 'The bot that started this store', 1),
     ('File Converter Bot', 'fileconverterbot', 'Convert files between different formats', 19),
@@ -223,8 +221,10 @@ const MIGRATION_STATEMENTS = [
 
 let dbInitPromise: Promise<void> | null = null;
 
-const ensureDatabase = (db: D1Database) => {
+const ensureDatabase = (env: { DB: D1Database; ADMIN_IDS?: string }) => {
   if (dbInitPromise) return dbInitPromise;
+
+  const db = env.DB;
 
   dbInitPromise = (async () => {
     const existing = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").first();
@@ -246,23 +246,45 @@ const ensureDatabase = (db: D1Database) => {
         try { await db.prepare("ALTER TABLE bots ADD COLUMN country_id INTEGER REFERENCES countries(id)").run(); } catch { /* already exists */ }
         try { await db.prepare("ALTER TABLE bots ADD COLUMN inlinequeries INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
       }
+      // Add rating columns to bots table if missing
+      try {
+        await db.prepare("SELECT rating_count FROM bots LIMIT 1").first();
+      } catch {
+        try { await db.prepare("ALTER TABLE bots ADD COLUMN rating_count INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
+        try { await db.prepare("ALTER TABLE bots ADD COLUMN rating_sum INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
+      }
       // Add inlinequeries column to bot_submissions if missing
       try {
         await db.prepare("SELECT inlinequeries FROM bot_submissions LIMIT 1").first();
       } catch {
         try { await db.prepare("ALTER TABLE bot_submissions ADD COLUMN inlinequeries INTEGER DEFAULT 0").run(); } catch { /* already exists */ }
       }
-      return;
+    } else {
+      // Initialize schema sequentially; use prepare/run to avoid parser quirks in exec.
+      for (const statement of SCHEMA_STATEMENTS) {
+        try {
+          const trimmed = statement.trim().replace(/;$/, "");
+          await db.prepare(`${trimmed};`).run();
+        } catch (err) {
+          console.error('Schema exec failed for statement:', statement);
+          throw err;
+        }
+      }
     }
 
-    // Initialize schema sequentially; use prepare/run to avoid parser quirks in exec.
-    for (const statement of SCHEMA_STATEMENTS) {
-      try {
-        const trimmed = statement.trim().replace(/;$/, "");
-        await db.prepare(`${trimmed};`).run();
-      } catch (err) {
-        console.error('Schema exec failed for statement:', statement);
-        throw err;
+    // Seed admin users from ADMIN_IDS env var
+    if (env.ADMIN_IDS) {
+      const adminIds = env.ADMIN_IDS.split(',').map(id => Number.parseInt(id.trim(), 10)).filter(id => !Number.isNaN(id));
+      for (const adminId of adminIds) {
+        try {
+          await db.prepare(
+            "INSERT OR IGNORE INTO users (telegram_id, username, banned, is_admin, created_at) VALUES (?, NULL, 0, 1, datetime('now'))"
+          ).bind(adminId).run();
+          // Ensure existing users are marked as admin
+          await db.prepare(
+            "UPDATE users SET is_admin = 1 WHERE telegram_id = ?"
+          ).bind(adminId).run();
+        } catch { /* ignore */ }
       }
     }
   })().catch((err) => {
@@ -276,7 +298,7 @@ const ensureDatabase = (db: D1Database) => {
 const app = new Hono<HonoContext>();
 
 app.use("*", async (c, next) => {
-  await ensureDatabase(c.env.DB);
+  await ensureDatabase(c.env);
   await next();
 });
 

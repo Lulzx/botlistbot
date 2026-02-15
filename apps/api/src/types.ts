@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  ADMIN_IDS?: string;
 }
 
 export type HonoContext = {

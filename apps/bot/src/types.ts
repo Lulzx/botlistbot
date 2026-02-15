@@ -4,6 +4,7 @@ export interface Env {
 	BOT_TOKEN: string;
 	API_BASE_URL: string;
 	API: Fetcher;
+	ADMIN_IDS: string;
 }
 
 export type HonoContext = {
