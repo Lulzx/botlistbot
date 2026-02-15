@@ -33,6 +33,8 @@ export async function reportSpam(
 	return { success: true, message: 'Spam report submitted' };
 }
 
+const OFFLINE_REPORT_THRESHOLD = 3;
+
 export async function reportOffline(db: D1Database, botUsername: string, telegramId: number): Promise<ApiResponse> {
 	const user = await getOrCreateUser(db, telegramId);
 
@@ -47,10 +49,31 @@ export async function reportOffline(db: D1Database, botUsername: string, telegra
 
 	if (bot.offline === 1) return { error: 'This bot has already been reported as offline' };
 
+	// Check if this user already reported this bot as offline (reuse spam_reports with reason)
+	const existing = await db
+		.prepare("SELECT id FROM spam_reports WHERE bot_id = ? AND reported_by = ? AND reason = 'offline'")
+		.bind(bot.id, user.id)
+		.first();
+
+	if (existing) return { error: 'You have already reported this bot as offline' };
+
 	await db
-		.prepare("UPDATE bots SET offline = 1, updated_at = datetime('now') WHERE id = ?")
-		.bind(bot.id)
+		.prepare("INSERT INTO spam_reports (bot_id, reported_by, reason, created_at) VALUES (?, ?, 'offline', datetime('now'))")
+		.bind(bot.id, user.id)
 		.run();
+
+	// Only mark offline after threshold reports
+	const reportCount = await db
+		.prepare("SELECT COUNT(*) as count FROM spam_reports WHERE bot_id = ? AND reason = 'offline'")
+		.bind(bot.id)
+		.first<{ count: number }>();
+
+	if (reportCount && reportCount.count >= OFFLINE_REPORT_THRESHOLD) {
+		await db
+			.prepare("UPDATE bots SET offline = 1, updated_at = datetime('now') WHERE id = ?")
+			.bind(bot.id)
+			.run();
+	}
 
 	return { success: true, message: 'Bot reported as offline' };
 }

@@ -1,3 +1,4 @@
+import { GrammyError } from 'grammy';
 import { Composer } from 'grammy/web';
 import { getAllActiveSubscribers } from '../db';
 import { isAdminId } from '../config';
@@ -5,6 +6,9 @@ import { MESSAGES } from '../constants';
 import { createConfirmKeyboard } from '../keyboards';
 import { trackActivity } from '../tracking';
 import type { MyContext } from '../types';
+
+const BROADCAST_BATCH_SIZE = 25;
+const BROADCAST_BATCH_DELAY_MS = 1000;
 
 export const composer = new Composer<MyContext>();
 
@@ -69,12 +73,24 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 		const subscribers = await getAllActiveSubscribers(ctx.env.DB, adminId);
 
 		let sentCount = 0;
-		for (const sub of subscribers) {
+		for (let i = 0; i < subscribers.length; i++) {
+			const sub = subscribers[i];
 			try {
 				await ctx.api.sendMessage(sub.chat_id, text, { parse_mode: 'HTML' });
 				sentCount++;
 			} catch (err) {
 				console.error(`Failed to send broadcast to ${sub.chat_id}:`, err);
+				// Deactivate subscription if user blocked the bot or chat is gone
+				if (err instanceof GrammyError && (err.error_code === 403 || err.error_code === 400)) {
+					ctx.env.DB.prepare('UPDATE subscriptions SET active = 0 WHERE chat_id = ?')
+						.bind(sub.chat_id)
+						.run()
+						.catch(() => console.error(`Failed to deactivate subscription for ${sub.chat_id}`));
+				}
+			}
+			// Rate limit: pause after every batch to avoid Telegram limits
+			if ((i + 1) % BROADCAST_BATCH_SIZE === 0 && i + 1 < subscribers.length) {
+				await new Promise((resolve) => setTimeout(resolve, BROADCAST_BATCH_DELAY_MS));
 			}
 		}
 
@@ -91,6 +107,11 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 
 // Cancel broadcast callback
 composer.callbackQuery('broadcast_cancel', async (ctx) => {
+	const adminId = ctx.from?.id;
+	if (!adminId || !isAdminId(adminId, ctx.env)) {
+		await ctx.answerCallbackQuery({ text: 'Unauthorized' });
+		return;
+	}
 	await ctx.answerCallbackQuery({ text: 'Cancelled' });
 	await ctx.editMessageText(MESSAGES.BROADCAST_CANCELLED);
 });

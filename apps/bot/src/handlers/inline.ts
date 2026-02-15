@@ -2,7 +2,7 @@ import { Composer, InlineQueryResultBuilder } from 'grammy/web';
 import { CATEGORIES } from '@botlistbot/shared';
 import type { Category } from '@botlistbot/shared';
 import { type Bot, searchBots } from '../db';
-import { CATEGORY_NAMES } from '../constants';
+import { CATEGORY_NAMES, buildSearchOpts, escapeHtml } from '../constants';
 import type { MyContext } from '../types';
 
 const INLINE_PAGE_SIZE = 20;
@@ -26,7 +26,7 @@ const buildBotResult = (bot: Bot, query: string, offset: number) => {
 			],
 		},
 	}).text(
-		`🤖 <b>${bot.name}</b> (@${bot.username})\n${bot.description || 'No description available.'}\n\n🏷 ${category}${rating ? `\n⭐️ ${rating}` : ''}\n🔗 https://t.me/${bot.username}`,
+		`🤖 <b>${escapeHtml(bot.name)}</b> (@${escapeHtml(bot.username)})\n${escapeHtml(bot.description || 'No description available.')}\n\n🏷 ${category}${rating ? `\n⭐️ ${rating}` : ''}\n🔗 https://t.me/${bot.username}`,
 		{
 			parse_mode: 'HTML',
 			link_preview_options: {
@@ -40,7 +40,7 @@ const buildKeepTypingResult = (query: string, offset: number) => {
 	return InlineQueryResultBuilder.article(`KEEP_TYPING-${offset}`, 'Keep typing to search bots', {
 		description: 'Enter at least 3 characters (e.g. "music", "@weatherbot")',
 	}).text(
-		`You typed "<b>${query}</b>". Type at least 3 characters to search the BotList.\n\nExamples:\n• music\n• weather\n• @username`,
+		`You typed "<b>${escapeHtml(query)}</b>". Type at least 3 characters to search the BotList.\n\nExamples:\n• music\n• weather\n• @username`,
 		{
 			parse_mode: 'HTML',
 		},
@@ -121,25 +121,14 @@ composer.on('inline_query', async (ctx) => {
 		}
 
 		try {
-			const sanitizedQuery = query.replace(/^@+/, '');
-
-			const searchOpts: { name?: string; username?: string; description?: string } = {
-				name: sanitizedQuery,
-				description: sanitizedQuery,
-			};
-
-			if (query.startsWith('@')) {
-				searchOpts.username = sanitizedQuery;
-			}
-
-			const bots = await searchBots(ctx.env.DB, searchOpts);
+			const bots = await searchBots(ctx.env.DB, buildSearchOpts(query));
 
 			if (bots.length === 0) {
 				return await ctx.answerInlineQuery(
 					[
 						InlineQueryResultBuilder.article(`EMPTY-${start}`, 'No bots found', {
 							description: 'Try another keyword or @username',
-						}).text(`No bots found for "<b>${query}</b>". Try another keyword or a bot @username.`, {
+						}).text(`No bots found for "<b>${escapeHtml(query)}</b>". Try another keyword or a bot @username.`, {
 							parse_mode: 'HTML',
 						}),
 					],

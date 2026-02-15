@@ -58,7 +58,9 @@ export async function removeKeyword(
 	const admin = await getAdminUser(db, adminTelegramId);
 	if (!admin) return { error: 'Unauthorized' };
 
-	await db.prepare('DELETE FROM keywords WHERE bot_id = ? AND name = ?').bind(botId, name).run();
+	const result = await db.prepare('DELETE FROM keywords WHERE bot_id = ? AND name = ?').bind(botId, name).run();
+
+	if (result.meta.changes === 0) return { error: 'Keyword not found' };
 
 	return { success: true, message: 'Keyword removed' };
 }

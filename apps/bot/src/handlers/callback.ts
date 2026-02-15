@@ -12,7 +12,7 @@ import {
 	createSuggestion,
 } from '../db';
 import type { MyContext } from '../types';
-import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from './../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, buildSearchOpts, escapeHtml, pick } from './../constants';
 import {
 	createCategoriesKeyboard,
 	createEmptyFavoritesKeyboard,
@@ -79,7 +79,7 @@ composer.on('callback_query:data', async (ctx) => {
 
 		// Handle show_categories callback
 		if (data === 'show_categories') {
-			const keyboard = await createCategoriesKeyboard(ctx);
+			const keyboard = createCategoriesKeyboard();
 			await safeEditMessageText(ctx, '📂 <b>Bot Categories</b>\n\nSelect a category to browse bots:', {
 				parse_mode: 'HTML',
 				reply_markup: keyboard,
@@ -240,18 +240,7 @@ composer.on('callback_query:data', async (ctx) => {
 				return;
 			}
 
-			const sanitizedQuery = query.replace(/^@+/, '');
-
-			const searchOpts: { name?: string; username?: string; description?: string } = {
-				name: sanitizedQuery,
-				description: sanitizedQuery,
-			};
-
-			if (query.startsWith('@')) {
-				searchOpts.username = sanitizedQuery;
-			}
-
-			const bots = await searchBots(ctx.env.DB, searchOpts);
+			const bots = await searchBots(ctx.env.DB, buildSearchOpts(query));
 
 			if (bots.length <= 10) {
 				await ctx.answerCallbackQuery({ text: 'No more results' });
@@ -270,7 +259,7 @@ composer.on('callback_query:data', async (ctx) => {
 				console.debug('Failed to clear inline keyboard for search results:', error);
 			}
 
-			await ctx.reply(`More results for "<b>${query}</b>":\n\n${botList}${extraNote}`, {
+			await ctx.reply(`More results for "<b>${escapeHtml(query)}</b>":\n\n${botList}${extraNote}`, {
 				parse_mode: 'HTML',
 				reply_markup: createInlineSearchKeyboard(query),
 			});

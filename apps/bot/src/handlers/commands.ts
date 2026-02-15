@@ -21,7 +21,7 @@ import {
 	createSuggestion,
 	rateBot,
 } from '../db';
-import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, pick } from '../constants';
+import { CATEGORY_NAMES, EASTER_EGG_ADJECTIVES, EASTER_EGG_ENDINGS, EASTER_EGG_NOUNS, MESSAGES, buildSearchOpts, escapeHtml, pick } from '../constants';
 import {
 	createBotListKeyboard,
 	createCategoriesKeyboard,
@@ -51,7 +51,7 @@ composer.command('help', async (ctx) => {
 // /category command (alias for /categories)
 composer.command(['category', 'categories'], async (ctx) => {
 	try {
-		const keyboard = await createCategoriesKeyboard(ctx);
+		const keyboard = createCategoriesKeyboard();
 		await ctx.reply('📂 <b>Bot Categories</b>\n\nSelect a category to browse bots:', {
 			parse_mode: 'HTML',
 			reply_markup: keyboard,
@@ -77,7 +77,7 @@ composer.command('explore', async (ctx) => {
 		const botList = bots
 			.map(
 				(bot) =>
-					`• <b>@${bot.username}</b> - ${bot.name}\n  ${bot.description?.slice(0, 100) || 'No description'}${bot.description && bot.description.length > 100 ? '...' : ''}`,
+					`• <b>@${escapeHtml(bot.username)}</b> - ${escapeHtml(bot.name)}\n  ${escapeHtml(bot.description?.slice(0, 100) || 'No description')}${bot.description && bot.description.length > 100 ? '...' : ''}`,
 			)
 			.join('\n\n');
 
@@ -190,18 +190,7 @@ composer.command('search', async (ctx) => {
 	}
 
 	try {
-		const sanitizedQuery = query.replace(/^@+/, '');
-
-		const searchOpts: { name?: string; username?: string; description?: string } = {
-			name: sanitizedQuery,
-			description: sanitizedQuery,
-		};
-
-		if (query.startsWith('@')) {
-			searchOpts.username = sanitizedQuery;
-		}
-
-		const bots = await searchBots(ctx.env.DB, searchOpts);
+		const bots = await searchBots(ctx.env.DB, buildSearchOpts(query));
 
 		trackActivity(ctx, 'search', query);
 
@@ -221,7 +210,7 @@ composer.command('search', async (ctx) => {
 		});
 		const moreText = bots.length > 10 ? `\n\n<i>...and ${bots.length - 10} more results</i>` : '';
 
-		await ctx.reply(`${MESSAGES.SEARCH_RESULTS} for "<b>${query}</b>":\n\n${botList.join('\n\n')}${moreText}`, {
+		await ctx.reply(`${MESSAGES.SEARCH_RESULTS} for "<b>${escapeHtml(query)}</b>":\n\n${botList.join('\n\n')}${moreText}`, {
 			parse_mode: 'HTML',
 			reply_markup: createSearchResultsKeyboard(bots, query),
 		});
@@ -656,4 +645,49 @@ composer.command('easteregg', async (ctx) => {
 		parse_mode: 'HTML',
 		reply_markup: keyboard,
 	});
+});
+
+// Handle replies to suggestion prompts (value-based suggestions like name, description, keywords)
+const SUGGESTION_ACTION_MAP: Record<string, string> = {
+	'keyword to add': 'add_keyword',
+	'keyword to remove': 'remove_keyword',
+};
+
+composer.on('message:text', async (ctx, next) => {
+	const replyTo = ctx.message.reply_to_message;
+	if (!replyTo?.text?.includes('Reply to this message with the new value')) {
+		return next();
+	}
+
+	const actionMatch = replyTo.text.match(/enter the new (.+?) value for/);
+	const usernameMatch = replyTo.text.match(/@(\w+)/);
+	if (!actionMatch || !usernameMatch) return next();
+
+	const userId = ctx.from?.id;
+	if (!userId) return;
+
+	const actionLabel = actionMatch[1];
+	const action = SUGGESTION_ACTION_MAP[actionLabel] || actionLabel;
+	const botUsername = usernameMatch[1];
+	const value = ctx.message.text.trim();
+
+	if (!value) {
+		await ctx.reply('Please provide a value.');
+		return;
+	}
+
+	try {
+		const result = await createSuggestion(ctx.env.DB, userId, botUsername, action, value);
+
+		if (result.error) {
+			await ctx.reply(`Error: ${result.error}`);
+			return;
+		}
+
+		trackActivity(ctx, 'suggestion', `${action} for @${botUsername}`);
+		await ctx.reply(MESSAGES.SUGGEST_SUCCESS, { parse_mode: 'HTML' });
+	} catch (error) {
+		console.error('Error submitting suggestion via reply:', error);
+		await ctx.reply('Failed to submit suggestion. Please try again.');
+	}
 });

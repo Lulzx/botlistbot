@@ -335,4 +335,24 @@ export const EASTER_EGG_NOUNS = [
 
 export const EASTER_EGG_ENDINGS = ['Bot', 'Bot', 'Bot', '_bot', 'Helper', 'Buddy', 'Pal', 'Assistant'];
 
-export const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
+export const pick = <T>(arr: readonly T[]): T => {
+	if (arr.length === 0) throw new Error('Cannot pick from empty array');
+	return arr[Math.floor(Math.random() * arr.length)];
+};
+
+/** Escape HTML special characters for Telegram parse_mode: 'HTML' */
+export const escapeHtml = (text: string): string =>
+	text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Build search options from a user query string */
+export const buildSearchOpts = (query: string): { name?: string; username?: string; description?: string } => {
+	const sanitized = query.replace(/^@+/, '');
+	const opts: { name?: string; username?: string; description?: string } = {
+		name: sanitized,
+		description: sanitized,
+	};
+	if (query.startsWith('@')) {
+		opts.username = sanitized;
+	}
+	return opts;
+};

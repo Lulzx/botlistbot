@@ -1,6 +1,6 @@
 import { CATEGORIES } from '@botlistbot/shared';
 import type { ApiResponse, Bot, BotSubmission, UserInfo } from './types';
-import { getAdminUser, getOrCreateUser } from './users';
+import { getAdminUser } from './users';
 
 const sanitizeUsername = (username: string) => username.replace(/^@+/, '').trim();
 
@@ -126,14 +126,12 @@ export async function addBot(
 
 	if (existingBot) return { error: 'This bot is already in the BotList' };
 
-	const adminUser = await getOrCreateUser(db, opts.admin_telegram_id);
-
 	await db
 		.prepare(
 			`INSERT INTO bots (name, username, description, category_id, submitted_by, approved, offline, spam, rating_count, rating_sum, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, 0, 0, 0, 0, datetime('now'), datetime('now'))`,
 		)
-		.bind(opts.name.trim(), username, opts.description.trim(), opts.category_id, adminUser.id)
+		.bind(opts.name.trim(), username, opts.description.trim(), opts.category_id, admin.id)
 		.run();
 
 	const bot = await db

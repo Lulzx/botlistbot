@@ -7,16 +7,16 @@ import type { Env, HonoContext, MyContext } from './types';
 const app = new Hono<HonoContext>();
 
 let cachedBot: Bot<MyContext> | null = null;
-let currentEnv: Env | null = null;
+// Per-request env, safe for CF Workers (single-threaded per isolate)
+let requestEnv: Env;
 
 function getBot(token: string): Bot<MyContext> {
 	if (cachedBot) return cachedBot;
 
 	const bot = new Bot<MyContext>(token);
 
-	// Inject env from the outer Hono context — currentEnv is set before each webhookCallback
 	bot.use((ctx, next) => {
-		ctx.env = currentEnv!;
+		ctx.env = requestEnv;
 		return next();
 	});
 
@@ -40,14 +40,14 @@ app.post('/:token', async (c) => {
 	}
 
 	if (rt !== c.env.BOT_TOKEN) {
-		console.warn(`Invalid token received: ${rt}`);
+		console.warn('Invalid webhook token received');
 		return c.text('Invalid Token', 401);
 	}
 
 	await ensureDatabase(c.env);
 
+	requestEnv = c.env;
 	const bot = getBot(c.env.BOT_TOKEN);
-	currentEnv = c.env;
 
 	try {
 		const callback = webhookCallback(bot, 'hono');

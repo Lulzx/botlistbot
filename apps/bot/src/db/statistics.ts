@@ -52,7 +52,7 @@ export async function getStatisticsSummary(db: D1Database, adminTelegramId: numb
 
 	const [actionsResult, totalBots, totalUsers, totalFavorites, pendingSuggestions] = await Promise.all([
 		db
-			.prepare('SELECT action, COUNT(*) as count FROM statistics GROUP BY action ORDER BY count DESC')
+			.prepare("SELECT action, COUNT(*) as count FROM statistics WHERE created_at >= datetime('now', '-30 days') GROUP BY action ORDER BY count DESC")
 			.all<{ action: string; count: number }>(),
 		db.prepare('SELECT COUNT(*) as count FROM bots').first<{ count: number }>(),
 		db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>(),

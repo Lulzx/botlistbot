@@ -12,8 +12,8 @@ composer.on('chosen_inline_result', async (ctx) => {
 		const chosenInlineResult = ctx.chosenInlineResult;
 		const result_id: string = chosenInlineResult.result_id;
 
-		if (result_id.startsWith('CAT ')) {
-			const [, , , categoryId] = result_id.split(' ');
+		if (result_id.startsWith('CAT-')) {
+			const categoryId = result_id.split('-')[1];
 
 			if (!categoryId || Number.isNaN(Number(categoryId))) {
 				console.error(`Invalid category ID in result_id: ${result_id}`);
@@ -28,12 +28,18 @@ composer.on('chosen_inline_result', async (ctx) => {
 				if (bots.length === 0) {
 					await ctx.editMessageText(`🤷 No bots found in ${categoryName}.`);
 				} else {
-					const botList = bots
-						.map((bot) => `• @${bot.username} - ${bot.name}`)
-						.join('\n')
-						.substring(0, 4083); // Telegram message limit
+					const header = `🤖 Bots in ${categoryName} (${bots.length} found):\n\n`;
+					const maxLen = 4096 - header.length;
+					const lines: string[] = [];
+					let len = 0;
+					for (const bot of bots) {
+						const line = `• @${bot.username} - ${bot.name}`;
+						if (len + line.length + 1 > maxLen) break;
+						lines.push(line);
+						len += line.length + 1;
+					}
 
-					await ctx.editMessageText(`🤖 Bots in ${categoryName} (${bots.length} found):\n\n${botList}`);
+					await ctx.editMessageText(`${header}${lines.join('\n')}`);
 				}
 			} catch (fetchError) {
 				console.error(`Failed to fetch bots for category ${categoryId}:`, fetchError);

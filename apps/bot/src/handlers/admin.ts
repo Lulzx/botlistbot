@@ -463,7 +463,7 @@ composer.command('updatebot', async (ctx) => {
 		return;
 	}
 
-	const updates: Record<string, unknown> = {};
+	const updates: { name?: string; description?: string; category_id?: number } = {};
 
 	if (name && name !== '-') {
 		updates.name = name;
@@ -488,7 +488,7 @@ composer.command('updatebot', async (ctx) => {
 	}
 
 	try {
-		const result = await updateBot(ctx.env.DB, username, adminId, updates as Parameters<typeof updateBot>[3]);
+		const result = await updateBot(ctx.env.DB, username, adminId, updates);
 
 		if ('error' in result && result.error) {
 			const errorMsg = result.error;

@@ -37,6 +37,9 @@ vi.mock('grammy/web', () => ({
 			}
 			return this;
 		}
+		on(_filter: string, _handler: (ctx: any, next: () => Promise<void>) => Promise<void>) {
+			return this;
+		}
 	},
 }));
 

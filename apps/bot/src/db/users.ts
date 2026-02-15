@@ -17,6 +17,22 @@ export async function getOrCreateUser(
 			.run();
 		user = await db.prepare('SELECT * FROM users WHERE telegram_id = ?').bind(telegramId).first<User>();
 		if (!user) throw new Error(`Failed to create user for telegram_id ${telegramId}`);
+	} else if (username || firstName) {
+		const updates: string[] = [];
+		const params: unknown[] = [];
+		if (username && user.username !== username) {
+			updates.push('username = ?');
+			params.push(username);
+		}
+		if (firstName && user.first_name !== firstName) {
+			updates.push('first_name = ?');
+			params.push(firstName);
+		}
+		if (updates.length > 0) {
+			params.push(telegramId);
+			await db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE telegram_id = ?`).bind(...params).run();
+			user = { ...user, username: username || user.username, first_name: firstName || user.first_name };
+		}
 	}
 
 	return user;

@@ -23,10 +23,6 @@ composer.use(broadcast);
 import hints from './hints';
 composer.use(hints);
 
-// Categories command (kept for backward compatibility)
-import categories from './categories';
-composer.use(categories);
-
 // Callback query handlers
 import callback_queries from './callback';
 composer.use(callback_queries);
@@ -40,4 +36,4 @@ import chosen_inline_result from './chosen_inline_result';
 composer.use(chosen_inline_result);
 
 // Log unhandled updates
-composer.use((ctx) => console.log('UnHandled update', JSON.stringify(ctx)));
+composer.use((ctx) => console.log('Unhandled update', JSON.stringify(ctx.update)));

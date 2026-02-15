@@ -1,10 +1,11 @@
 import type { Bot } from './types';
 
 const MAX_QUERY_LENGTH = 100;
+const ACTIVE_BOT_FILTER = 'b.approved = 1 AND b.spam = 0 AND b.offline = 0';
 
 export async function searchBots(
 	db: D1Database,
-	opts: { name?: string; username?: string; description?: string },
+	opts: { name?: string; username?: string; description?: string; limit?: number; offset?: number },
 ): Promise<Bot[]> {
 	const name = opts.name?.trim().slice(0, MAX_QUERY_LENGTH);
 	const username = opts.username ? opts.username.replace(/^@+/, '').trim().slice(0, MAX_QUERY_LENGTH) : undefined;
@@ -13,7 +14,7 @@ export async function searchBots(
 	if (!name && !username && !description) return [];
 
 	const conditions: string[] = [];
-	const params: string[] = [];
+	const params: unknown[] = [];
 
 	if (name) {
 		conditions.push('LOWER(b.name) LIKE LOWER(?)');
@@ -36,21 +37,29 @@ export async function searchBots(
 
 	if (conditions.length === 0) return [];
 
-	const query = `SELECT DISTINCT b.* FROM bots b WHERE ${conditions.map((c) => `(${c})`).join(' OR ')}`;
+	const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+	const offset = Math.max(opts.offset ?? 0, 0);
+
+	const query = `SELECT DISTINCT b.* FROM bots b WHERE ${ACTIVE_BOT_FILTER} AND (${conditions.map((c) => `(${c})`).join(' OR ')}) LIMIT ? OFFSET ?`;
+	params.push(limit, offset);
+
 	const { results } = await db.prepare(query).bind(...params).all<Bot>();
 	return results;
 }
 
 export async function getRandomBots(db: D1Database, limit = 5): Promise<Bot[]> {
 	const safeLimit = Math.min(Math.max(limit, 1), 20);
-	const { results } = await db.prepare('SELECT * FROM bots ORDER BY RANDOM() LIMIT ?').bind(safeLimit).all<Bot>();
+	const { results } = await db
+		.prepare(`SELECT * FROM bots WHERE ${ACTIVE_BOT_FILTER} ORDER BY RANDOM() LIMIT ?`)
+		.bind(safeLimit)
+		.all<Bot>();
 	return results;
 }
 
 export async function getNewBots(db: D1Database, limit = 10): Promise<Bot[]> {
 	const safeLimit = Math.min(Math.max(limit, 1), 50);
 	const { results } = await db
-		.prepare('SELECT * FROM bots ORDER BY created_at DESC LIMIT ?')
+		.prepare(`SELECT * FROM bots WHERE ${ACTIVE_BOT_FILTER} ORDER BY created_at DESC LIMIT ?`)
 		.bind(safeLimit)
 		.all<Bot>();
 	return results;
@@ -60,7 +69,7 @@ export async function getBestBots(db: D1Database, limit = 10): Promise<Bot[]> {
 	const safeLimit = Math.min(Math.max(limit, 1), 50);
 	const { results } = await db
 		.prepare(
-			'SELECT *, CASE WHEN rating_count > 0 THEN rating_sum * 1.0 / rating_count ELSE 0 END as avg_rating FROM bots WHERE rating_count > 0 ORDER BY avg_rating DESC, rating_count DESC LIMIT ?',
+			`SELECT *, CASE WHEN rating_count > 0 THEN rating_sum * 1.0 / rating_count ELSE 0 END as avg_rating FROM bots WHERE ${ACTIVE_BOT_FILTER} AND rating_count > 0 ORDER BY avg_rating DESC, rating_count DESC LIMIT ?`,
 		)
 		.bind(safeLimit)
 		.all<Bot>();
@@ -72,12 +81,16 @@ export async function getBotByUsername(db: D1Database, username: string): Promis
 	return db.prepare('SELECT * FROM bots WHERE LOWER(username) = LOWER(?)').bind(clean).first<Bot>();
 }
 
-export async function getBotsByCategory(db: D1Database, categoryId: number): Promise<Bot[]> {
-	const { results } = await db.prepare('SELECT * FROM bots WHERE category_id = ?').bind(categoryId).all<Bot>();
+export async function getBotsByCategory(db: D1Database, categoryId: number, limit = 50): Promise<Bot[]> {
+	const safeLimit = Math.min(Math.max(limit, 1), 200);
+	const { results } = await db
+		.prepare(`SELECT * FROM bots WHERE category_id = ? AND ${ACTIVE_BOT_FILTER} ORDER BY name LIMIT ?`)
+		.bind(categoryId, safeLimit)
+		.all<Bot>();
 	return results;
 }
 
 export async function getAllBots(db: D1Database): Promise<Bot[]> {
-	const { results } = await db.prepare('SELECT * FROM bots').all<Bot>();
+	const { results } = await db.prepare(`SELECT * FROM bots WHERE ${ACTIVE_BOT_FILTER}`).all<Bot>();
 	return results;
 }
