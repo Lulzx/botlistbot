@@ -1,7 +1,7 @@
 import type { Bot } from './types';
 
 const MAX_QUERY_LENGTH = 100;
-const ACTIVE_BOT_FILTER = 'b.approved = 1 AND b.spam = 0 AND b.offline = 0';
+const ACTIVE_BOT_FILTER = 'approved = 1 AND spam = 0 AND offline = 0';
 
 export async function searchBots(
 	db: D1Database,
