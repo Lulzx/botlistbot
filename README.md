@@ -34,6 +34,7 @@ packages/
 | `/mybots` | View your submitted bots with stats |
 | `/subscribe` | Subscribe to BotList update notifications |
 | `/unsubscribe` | Unsubscribe from notifications |
+| `/rate @bot N` | Rate a bot from 1 to 5 stars |
 | `/rules` | View BotListChat community rules |
 | `/easteregg` | Generate fun random bot name ideas |
 
@@ -120,6 +121,9 @@ Full API documentation available at the `/docs` endpoint.
 - `POST /subscriptions` — Subscribe
 - `DELETE /subscriptions/:chatId` — Unsubscribe
 - `POST /statistics` — Log activity
+- `POST /bots/username/:username/rate` — Rate a bot (1-5 stars)
+- `GET /bots/username/:username/rating` — Get bot's average rating
+- `GET /bots/username/:username/rate/:telegramId` — Get user's rating
 
 ### Admin
 
@@ -140,7 +144,7 @@ Full API documentation available at the `/docs` endpoint.
 
 ## Database Schema
 
-10 tables: `users`, `bots`, `bot_submissions`, `favorites`, `subscriptions`, `spam_reports`, `keywords`, `suggestions`, `statistics`, `countries`
+11 tables: `users`, `bots`, `bot_submissions`, `favorites`, `subscriptions`, `spam_reports`, `keywords`, `suggestions`, `statistics`, `countries`, `ratings`
 
 Auto-migrating — schema is created/upgraded on first request.
 
@@ -193,9 +197,7 @@ cd apps/bot && bun run webhook
 - **BotList Channel Transmission** — Publishing the full categorized bot list to the @BotList Telegram channel (old: `components/botlist.py`). This was a major feature that generates and sends category-organized messages to a public channel.
 - **Bot Checker Worker** — Background worker that pings bots to check if they're online/offline (old: `botcheckerworker/`).
 - **Forward/Reply Routing** — Handle forwarded bot messages and replies to detect @usernames and auto-lookup (old: `routing.py`).
-- **Rating System** — `rating_count`/`rating_sum` columns exist in schema but no endpoints to submit ratings. Old bot had a rating flow.
-
 ### Known Issues
 
 - **Categories duplication** — ~~Hardcoded in both `apps/api` and `apps/bot`~~ Fixed: now shared via `@botlistbot/shared` package.
-- **Ratings unused** — `rating_count`/`rating_sum`/`avg_rating` exist but are never written to. Need rating submission endpoints and bot-side UI.
+- **Ratings** — ~~`rating_count`/`rating_sum` were never written to~~ Fixed: full rating system with `/rate` command, API endpoints, and aggregate recalculation.

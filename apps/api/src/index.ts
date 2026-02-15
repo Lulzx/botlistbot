@@ -91,6 +91,16 @@ const SCHEMA_STATEMENTS = [
     name TEXT NOT NULL UNIQUE,
     emoji TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    bot_id INTEGER NOT NULL REFERENCES bots(id),
+    value INTEGER NOT NULL CHECK(value BETWEEN 1 AND 5),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, bot_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ratings_bot ON ratings(bot_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ratings_user ON ratings(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_bots_category ON bots(category_id)`,
   `CREATE INDEX IF NOT EXISTS idx_bots_created_at ON bots(created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_bots_username ON bots(username)`,
@@ -178,6 +188,16 @@ const MIGRATION_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_suggestions_pending ON suggestions(executed) WHERE executed = 0`,
   `CREATE INDEX IF NOT EXISTS idx_statistics_date ON statistics(created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_statistics_action ON statistics(action)`,
+  `CREATE TABLE IF NOT EXISTS ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    bot_id INTEGER NOT NULL REFERENCES bots(id),
+    value INTEGER NOT NULL CHECK(value BETWEEN 1 AND 5),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, bot_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ratings_bot ON ratings(bot_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ratings_user ON ratings(user_id)`,
   `INSERT OR IGNORE INTO countries (name, emoji) VALUES
     ('English', '🇬🇧'),
     ('Spanish', '🇪🇸'),
@@ -370,6 +390,11 @@ app.get("/docs", (c) => {
 <h2>Keywords (Admin)</h2>
 <div class="endpoint"><span class="method post">POST</span><span class="path">/bots/:id/keywords</span><span class="desc">Add keyword { name, admin_telegram_id }</span></div>
 <div class="endpoint"><span class="method delete">DELETE</span><span class="path">/bots/:id/keywords/:name?admin_id=</span><span class="desc">Remove keyword</span></div>
+
+<h2>Ratings</h2>
+<div class="endpoint"><span class="method post">POST</span><span class="path">/bots/username/:username/rate</span><span class="desc">Rate a bot { telegram_id, value (1-5) }</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/username/:username/rating</span><span class="desc">Get bot's average rating and count</span></div>
+<div class="endpoint"><span class="method get">GET</span><span class="path">/bots/username/:username/rate/:telegramId</span><span class="desc">Get user's rating for a bot</span></div>
 
 <h2>Admin</h2>
 <div class="endpoint"><span class="method get">GET</span><span class="path">/admin/submissions/pending?admin_id=</span><span class="desc">Pending submissions</span></div>
@@ -1388,6 +1413,104 @@ app.get("/countries", async (c) => {
       "SELECT * FROM countries ORDER BY name"
     ).all<Country>();
     return c.json(results);
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// ==================== RATINGS ENDPOINTS ====================
+
+// Rate a bot (1-5 stars)
+app.post("/bots/username/:username/rate", async (c) => {
+  const username = c.req.param('username').replace('@', '');
+  const body = await c.req.json<{ telegram_id: number; value: number }>();
+
+  if (!body.telegram_id || !body.value) {
+    return c.json({ error: 'telegram_id and value (1-5) are required' }, 400);
+  }
+
+  const value = Math.round(body.value);
+  if (value < 1 || value > 5) {
+    return c.json({ error: 'Rating must be between 1 and 5' }, 400);
+  }
+
+  try {
+    const user = await getOrCreateUser(c.env.DB, body.telegram_id);
+
+    if (user.banned) {
+      return c.json({ error: 'You are banned' }, 403);
+    }
+
+    const bot = await c.env.DB.prepare(
+      "SELECT id FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first<{ id: number }>();
+
+    if (!bot) {
+      return c.json({ error: 'Bot not found' }, 404);
+    }
+
+    // Upsert rating
+    await c.env.DB.prepare(`
+      INSERT INTO ratings (user_id, bot_id, value, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, bot_id) DO UPDATE SET value = excluded.value, created_at = datetime('now')
+    `).bind(user.id, bot.id, value).run();
+
+    // Recalculate bot's aggregate rating
+    const agg = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt, SUM(value) as total FROM ratings WHERE bot_id = ?"
+    ).bind(bot.id).first<{ cnt: number; total: number }>();
+
+    await c.env.DB.prepare(
+      "UPDATE bots SET rating_count = ?, rating_sum = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(agg?.cnt ?? 0, agg?.total ?? 0, bot.id).run();
+
+    const avg = (agg?.cnt && agg?.total) ? (agg.total / agg.cnt) : 0;
+
+    return c.json({ success: true, message: 'Rating submitted', rating: { value, avg: Math.round(avg * 10) / 10, count: agg?.cnt ?? 0 } });
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Get a bot's rating info
+app.get("/bots/username/:username/rating", async (c) => {
+  const username = c.req.param('username').replace('@', '');
+
+  try {
+    const bot = await c.env.DB.prepare(
+      "SELECT id, rating_count, rating_sum FROM bots WHERE LOWER(username) = LOWER(?)"
+    ).bind(username).first<{ id: number; rating_count: number; rating_sum: number }>();
+
+    if (!bot) {
+      return c.json({ error: 'Bot not found' }, 404);
+    }
+
+    const avg = bot.rating_count > 0 ? Math.round((bot.rating_sum / bot.rating_count) * 10) / 10 : 0;
+
+    return c.json({ avg, count: bot.rating_count });
+  } catch (error) {
+    console.error('Database error:', error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Get a user's rating for a specific bot
+app.get("/bots/username/:username/rate/:telegramId", async (c) => {
+  const username = c.req.param('username').replace('@', '');
+  const telegramId = parseInt(c.req.param('telegramId'), 10);
+
+  try {
+    const row = await c.env.DB.prepare(`
+      SELECT r.value FROM ratings r
+      INNER JOIN users u ON r.user_id = u.id
+      INNER JOIN bots b ON r.bot_id = b.id
+      WHERE LOWER(b.username) = LOWER(?) AND u.telegram_id = ?
+    `).bind(username, telegramId).first<{ value: number }>();
+
+    return c.json({ value: row?.value ?? null });
   } catch (error) {
     console.error('Database error:', error);
     return c.json({ error: 'Internal server error' }, 500);

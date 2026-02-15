@@ -597,6 +597,66 @@ composer.command('suggest', async (ctx) => {
 	}
 });
 
+// /rate command - Rate a bot 1-5 stars
+composer.command('rate', async (ctx) => {
+	const input = ctx.match?.trim();
+
+	if (!input) {
+		await ctx.reply(MESSAGES.RATE_PROMPT, { parse_mode: 'HTML' });
+		return;
+	}
+
+	// Parse: @botusername 4  or  botusername 4
+	const match = input.match(/@?(\w+)\s+([1-5])/);
+	if (!match) {
+		await ctx.reply(MESSAGES.RATE_INVALID, { parse_mode: 'HTML' });
+		return;
+	}
+
+	const botUsername = match[1];
+	const value = Number.parseInt(match[2], 10);
+	const userId = ctx.from?.id;
+
+	if (!userId) {
+		await ctx.reply('Could not identify your user ID.');
+		return;
+	}
+
+	try {
+		const result = await postToApi<ApiResponse & { rating?: { avg: number; count: number } }>(
+			`/bots/username/${botUsername}/rate`,
+			{ telegram_id: userId, value },
+			ctx.env.API_BASE_URL,
+			ctx.env.API,
+		);
+
+		if (result.error) {
+			if (result.error.includes('not found')) {
+				await ctx.reply(MESSAGES.RATE_BOT_NOT_FOUND);
+			} else if (result.error.includes('banned')) {
+				await ctx.reply(MESSAGES.RATE_BANNED);
+			} else {
+				await ctx.reply(`Error: ${result.error}`);
+			}
+			return;
+		}
+
+		const avg = result.rating?.avg ?? value;
+		const count = result.rating?.count ?? 1;
+		trackActivity(ctx, 'rate', botUsername);
+		await ctx.reply(
+			MESSAGES.RATE_SUCCESS.replace('{username}', botUsername)
+				.replace('{value}', String(value))
+				.replace('{avg}', String(avg))
+				.replace('{count}', String(count)),
+			{ parse_mode: 'HTML' },
+		);
+	} catch (error) {
+		console.error('Error in /rate command:', error);
+		await ctx.reply("Sorry, I couldn't submit your rating. Please try again later.");
+	}
+});
+
 // /easteregg command - Generate a fun bot username
 composer.command('easteregg', async (ctx) => {
 	const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];

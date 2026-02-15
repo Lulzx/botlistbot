@@ -30,6 +30,7 @@ You can send or forward any bot <b>@username</b> to me, and I will tell you if i
 /mybots - See your submitted bots
 /subscribe - Get update notifications
 /unsubscribe - Disable notifications
+/rate - Rate a bot (1-5 stars)
 /rules - View BotListChat rules
 /easteregg - Generate a fun bot name
 
@@ -188,6 +189,13 @@ Available commands:
 	ADMIN_SUGGESTION_ACCEPTED: '✅ Suggestion accepted and applied.',
 	ADMIN_SUGGESTION_REJECTED: '❌ Suggestion rejected.',
 	ADMIN_STATS_EMPTY: 'No activity recorded yet.',
+
+	// Rating messages
+	RATE_PROMPT: '⭐ <b>Rate a Bot</b>\n\nUsage: <code>/rate @botusername 5</code>\n\nRate any bot from 1 to 5 stars.',
+	RATE_INVALID: '❌ Please provide a valid rating from 1 to 5.\n\nUsage: <code>/rate @botusername 3</code>',
+	RATE_SUCCESS: '✅ You rated <b>@{username}</b> {value}/5 stars!\n\nAverage rating: {avg}/5 ({count} votes)',
+	RATE_BOT_NOT_FOUND: '❌ This bot is not in the BotList database.',
+	RATE_BANNED: '🚫 You are banned from rating.',
 
 	// Broadcast messages
 	BROADCAST_PROMPT: '📢 <b>Broadcast</b>\n\nSend me the message to broadcast to all subscribers:',
