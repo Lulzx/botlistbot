@@ -46,22 +46,15 @@ composer.callbackQuery('broadcast_confirm', async (ctx) => {
 
 	// Extract broadcast text from the preview message
 	const messageText = ctx.callbackQuery.message?.text;
-	if (!messageText) {
-		await ctx.answerCallbackQuery({ text: 'Could not retrieve broadcast text' });
-		return;
-	}
+	const PREFIX = '📢 Preview:\n\n';
+	const SUFFIX = '\n\nSend to all subscribers?';
 
-	const prefix = '📢 Preview:\n\n';
-	const suffix = '\n\nSend to all subscribers?';
-	const startIdx = messageText.indexOf(prefix);
-	const endIdx = messageText.lastIndexOf(suffix);
-
-	if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+	if (!messageText || !messageText.startsWith(PREFIX) || !messageText.endsWith(SUFFIX)) {
 		await ctx.answerCallbackQuery({ text: 'Could not parse broadcast text' });
 		return;
 	}
 
-	const text = messageText.slice(startIdx + prefix.length, endIdx);
+	const text = messageText.slice(PREFIX.length, messageText.length - SUFFIX.length);
 	if (!text) {
 		await ctx.answerCallbackQuery({ text: 'No message to broadcast' });
 		return;

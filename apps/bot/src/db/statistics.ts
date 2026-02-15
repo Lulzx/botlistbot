@@ -5,18 +5,9 @@ export async function logActivity(
 	db: D1Database,
 	opts: { telegram_id?: number; action: string; entity?: string; level?: number },
 ): Promise<void> {
-	let userId: number | null = null;
-	if (opts.telegram_id) {
-		const user = await db
-			.prepare('SELECT id FROM users WHERE telegram_id = ?')
-			.bind(opts.telegram_id)
-			.first<{ id: number }>();
-		userId = user?.id ?? null;
-	}
-
 	await db
-		.prepare("INSERT INTO statistics (user_id, action, entity, level, created_at) VALUES (?, ?, ?, ?, datetime('now'))")
-		.bind(userId, opts.action, opts.entity || null, opts.level ?? 20)
+		.prepare("INSERT INTO statistics (telegram_id, action, entity, level, created_at) VALUES (?, ?, ?, ?, datetime('now'))")
+		.bind(opts.telegram_id || null, opts.action, opts.entity || null, opts.level ?? 20)
 		.run();
 }
 
@@ -33,9 +24,9 @@ export async function getStatistics(
 
 	const { results } = await db
 		.prepare(
-			`SELECT s.*, u.telegram_id as user_telegram_id, u.username
+			`SELECT s.*, s.telegram_id as user_telegram_id, u.username
       FROM statistics s
-      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN users u ON s.telegram_id = u.telegram_id
       WHERE s.level >= ?
       ORDER BY s.created_at DESC
       LIMIT ?`,

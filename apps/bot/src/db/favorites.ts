@@ -1,16 +1,18 @@
 import type { ApiResponse, Bot } from './types';
 import { getOrCreateUser } from './users';
 
-export async function getUserFavorites(db: D1Database, telegramId: number): Promise<Bot[]> {
+export async function getUserFavorites(db: D1Database, telegramId: number, limit = 100): Promise<Bot[]> {
+	const safeLimit = Math.min(Math.max(limit, 1), 200);
 	const { results } = await db
 		.prepare(
 			`SELECT b.* FROM bots b
       INNER JOIN favorites f ON b.id = f.bot_id
       INNER JOIN users u ON f.user_id = u.id
       WHERE u.telegram_id = ?
-      ORDER BY f.created_at DESC`,
+      ORDER BY f.created_at DESC
+      LIMIT ?`,
 		)
-		.bind(telegramId)
+		.bind(telegramId, safeLimit)
 		.all<Bot>();
 	return results;
 }

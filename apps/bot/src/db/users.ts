@@ -62,9 +62,18 @@ export async function isUserBanned(db: D1Database, telegramId: number, adminTele
 	return user?.banned === 1;
 }
 
+const adminCache = new Map<number, { user: User | null; expiry: number }>();
+const ADMIN_CACHE_TTL = 60_000; // 1 minute
+
 export async function getAdminUser(db: D1Database, adminTelegramId: number): Promise<User | null> {
 	if (!adminTelegramId) return null;
+
+	const cached = adminCache.get(adminTelegramId);
+	if (cached && Date.now() < cached.expiry) return cached.user;
+
 	const admin = await db.prepare('SELECT * FROM users WHERE telegram_id = ?').bind(adminTelegramId).first<User>();
-	if (!admin || admin.is_admin !== 1) return null;
-	return admin;
+	const result = admin && admin.is_admin === 1 ? admin : null;
+
+	adminCache.set(adminTelegramId, { user: result, expiry: Date.now() + ADMIN_CACHE_TTL });
+	return result;
 }

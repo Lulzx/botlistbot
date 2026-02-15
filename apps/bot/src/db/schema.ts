@@ -77,6 +77,7 @@ const SCHEMA_STATEMENTS = [
 	`CREATE TABLE IF NOT EXISTS statistics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id),
+    telegram_id INTEGER,
     action TEXT NOT NULL,
     entity TEXT,
     level INTEGER DEFAULT 20,
@@ -110,6 +111,7 @@ const SCHEMA_STATEMENTS = [
 	`CREATE INDEX IF NOT EXISTS idx_suggestions_pending ON suggestions(executed) WHERE executed = 0`,
 	`CREATE INDEX IF NOT EXISTS idx_statistics_date ON statistics(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_statistics_action ON statistics(action)`,
+	`CREATE INDEX IF NOT EXISTS idx_statistics_telegram_id ON statistics(telegram_id)`,
 	`INSERT OR IGNORE INTO bots (name, username, description, category_id) VALUES
     ('Bot Store Bot', 'storebot', 'The bot that started this store', 1),
     ('File Converter Bot', 'fileconverterbot', 'Convert files between different formats', 19),
@@ -164,6 +166,7 @@ const MIGRATION_STATEMENTS = [
 	`CREATE TABLE IF NOT EXISTS statistics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id),
+    telegram_id INTEGER,
     action TEXT NOT NULL,
     entity TEXT,
     level INTEGER DEFAULT 20,
@@ -180,6 +183,7 @@ const MIGRATION_STATEMENTS = [
 	`CREATE INDEX IF NOT EXISTS idx_suggestions_pending ON suggestions(executed) WHERE executed = 0`,
 	`CREATE INDEX IF NOT EXISTS idx_statistics_date ON statistics(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_statistics_action ON statistics(action)`,
+	`CREATE INDEX IF NOT EXISTS idx_statistics_telegram_id ON statistics(telegram_id)`,
 	`CREATE TABLE IF NOT EXISTS ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -213,12 +217,18 @@ const MIGRATION_STATEMENTS = [
     ('Vietnamese', '🇻🇳')`,
 ];
 
+// Bump this when adding migrations so warm isolates re-run them
+const SCHEMA_VERSION = 1;
 let dbInitPromise: Promise<void> | null = null;
+let initSchemaVersion: number | null = null;
 
 export function ensureDatabase(env: { DB: D1Database; ADMIN_IDS?: string }): Promise<void> {
-	if (dbInitPromise) return dbInitPromise;
+	if (dbInitPromise && initSchemaVersion === SCHEMA_VERSION) return dbInitPromise;
 
 	const db = env.DB;
+
+	dbInitPromise = null;
+	initSchemaVersion = null;
 
 	dbInitPromise = (async () => {
 		const existing = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").first();
@@ -268,6 +278,20 @@ export function ensureDatabase(env: { DB: D1Database; ADMIN_IDS?: string }): Pro
 					/* already exists */
 				}
 			}
+			try {
+				await db.prepare('SELECT telegram_id FROM statistics LIMIT 1').first();
+			} catch {
+				try {
+					await db.prepare('ALTER TABLE statistics ADD COLUMN telegram_id INTEGER').run();
+				} catch {
+					/* already exists */
+				}
+				try {
+					await db.prepare('CREATE INDEX IF NOT EXISTS idx_statistics_telegram_id ON statistics(telegram_id)').run();
+				} catch {
+					/* already exists */
+				}
+			}
 		} else {
 			for (const statement of SCHEMA_STATEMENTS) {
 				try {
@@ -300,8 +324,10 @@ export function ensureDatabase(env: { DB: D1Database; ADMIN_IDS?: string }): Pro
 		}
 	})().catch((err) => {
 		dbInitPromise = null;
+		initSchemaVersion = null;
 		throw err;
 	});
 
+	initSchemaVersion = SCHEMA_VERSION;
 	return dbInitPromise;
 }
