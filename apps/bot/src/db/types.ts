@@ -88,10 +88,12 @@ export interface StatisticsSummary {
 export interface Statistic {
 	id: number;
 	user_id?: number;
+	telegram_id?: number;
 	action: string;
 	entity?: string;
 	level: number;
 	created_at: string;
+	// Populated by JOIN in getStatistics
 	user_telegram_id?: number;
 	username?: string;
 }
